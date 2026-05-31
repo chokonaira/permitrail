@@ -1,13 +1,13 @@
 # Architecture
 
-PermitRail is a small runtime layer for proof-gated agent actions.
+Proofrail is a small runtime layer for proof-gated agent actions.
 
 ```txt
           untrusted context
         email / page / PDF
                 |
                 v
-AI Agent -> PermitRail Gateway -> Tool Adapter -> External System
+AI Agent -> Proofrail Gateway -> Tool Adapter -> External System
                 |
                 v
         Proof Provider

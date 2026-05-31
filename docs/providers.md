@@ -1,6 +1,6 @@
 # Provider Model
 
-Providers issue proofs. PermitRail should stay provider-neutral so it works across
+Providers issue proofs. Proofrail should stay provider-neutral so it works across
 countries, identity systems, and enterprise stacks.
 
 ## Provider Interface
@@ -60,6 +60,6 @@ Assurance: `credential_verified` or `qualified_trust`
 
 ## Provider Neutrality
 
-PermitRail should not become an identity vendor. It should be the control plane
+Proofrail should not become an identity vendor. It should be the control plane
 that lets agents consume proofs from many sources without receiving raw
 documents or credentials.

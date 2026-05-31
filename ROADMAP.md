@@ -35,7 +35,7 @@
 
 ## Later
 
-- Stripe Identity adapter
-- OpenID4VP adapter
-- EUDI wallet adapter
-- WalletGate provider adapter
+- Identity verification adapter (e.g. Persona, Stripe Identity)
+- Verifiable credential provider adapter
+- Custom HTTP webhook provider adapter
+- Hosted approval service

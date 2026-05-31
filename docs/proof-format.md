@@ -1,23 +1,23 @@
 # Proof Format
 
-PermitRail proofs are signed envelopes.
+Proofrail proofs are signed envelopes.
 
 ```json
 {
   "protected": {
     "alg": "EdDSA",
-    "kid": "permitrail-local-dev",
-    "typ": "permitrail.proof.v1"
+    "kid": "proofrail-local-dev",
+    "typ": "proofrail.proof.v1"
   },
   "payload": {
-    "kind": "permitrail.proof.v1",
+    "kind": "proofrail.proof.v1",
     "id": "proof_...",
     "claim": "human.approved_action",
     "value": true,
     "subject": "user_123",
     "audience": "email-agent",
     "purpose": "Send invoice INV-123 to client@example.com",
-    "provider": "permitrail-local",
+    "provider": "proofrail-local",
     "assurance": "human_approved",
     "nonce": "...",
     "issuedAt": "2026-05-31T12:00:00.000Z",
@@ -45,7 +45,7 @@ PermitRail proofs are signed envelopes.
 
 ## Assurance Levels
 
-PermitRail uses explicit assurance labels instead of pretending all proofs are the
+Proofrail uses explicit assurance labels instead of pretending all proofs are the
 same.
 
 | Level | Meaning |
@@ -55,7 +55,7 @@ same.
 | `human_approved` | Human approved the exact action |
 | `provider_verified` | External provider verified the claim |
 | `credential_verified` | Cryptographic credential verified the claim |
-| `qualified_trust` | High-assurance regulated trust framework |
+| `high_assurance` | Certified or regulated high-assurance verification |
 
 ## Purpose Binding
 

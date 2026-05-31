@@ -1,10 +1,11 @@
+import { stableStringify } from './canonical-json.ts';
 import { sha256 } from './crypto.ts';
 import { assuranceRank, verifyProof } from './proofs.ts';
 import type {
   AgentAction,
   AssuranceLevel,
   AssuranceRequirement,
-  PermitRailPolicy,
+  ProofrailPolicy,
   PolicyDecision,
   PolicyDecisionOutcome,
   PolicyRule,
@@ -14,8 +15,8 @@ import type {
   VerifyProofOptions,
 } from './types.ts';
 
-export const DEFAULT_POLICY: PermitRailPolicy = Object.freeze({
-  version: 'permitrail.policy.v1',
+export const DEFAULT_POLICY: ProofrailPolicy = Object.freeze({
+  version: 'proofrail.policy.v1',
   id: 'default-deny',
   defaults: {
     unconfiguredTool: 'deny' as const,
@@ -25,12 +26,12 @@ export const DEFAULT_POLICY: PermitRailPolicy = Object.freeze({
 
 type PolicyVerificationOptions = Partial<VerifyProofOptions>;
 
-export function evaluatePolicy<TInput = unknown>(
-  policy: PermitRailPolicy | undefined,
+export async function evaluatePolicy<TInput = unknown>(
+  policy: ProofrailPolicy | undefined,
   action: AgentAction<TInput>,
   proofEnvelope?: SignedEnvelope<ProofPayload>,
   verificationOptions: PolicyVerificationOptions = {},
-): PolicyDecision<TInput> {
+): Promise<PolicyDecision<TInput>> {
   const activePolicy = policy || DEFAULT_POLICY;
   const rule = resolveRule(activePolicy, action.tool);
   const policyId = rule?.id || activePolicy.id || 'inline-policy';
@@ -66,7 +67,7 @@ export function evaluatePolicy<TInput = unknown>(
   }
 
   try {
-    const proof = verifyProof(proofEnvelope, {
+    const proof = await verifyProof(proofEnvelope, {
       ...verificationOptions,
       publicKeyPem: verificationOptions.publicKeyPem,
       audience: required.audience || action.audience,
@@ -76,7 +77,8 @@ export function evaluatePolicy<TInput = unknown>(
       minAssurance: required.minAssurance || firstAssurance(required.assurance),
     });
 
-    const valueOk = required.value === undefined || proof.value === required.value;
+    const valueOk =
+      required.value === undefined || stableStringify(proof.value) === stableStringify(required.value);
     if (!valueOk) {
       return decision('deny', 'Proof value does not satisfy policy', policyId);
     }
@@ -95,7 +97,7 @@ export function evaluatePolicy<TInput = unknown>(
     }
 
     if (required.bindActionInputHash) {
-      const expectedHash = action.input === undefined ? undefined : sha256(action.input);
+      const expectedHash = action.input === undefined ? undefined : await sha256(action.input);
       if (!expectedHash || proof.actionInputHash !== expectedHash) {
         return decision('deny', 'Proof is not bound to this action input', policyId);
       }
@@ -111,7 +113,7 @@ export function evaluatePolicy<TInput = unknown>(
 }
 
 export function buildProofRequestFromPolicy<TInput = unknown>(
-  policy: PermitRailPolicy,
+  policy: ProofrailPolicy,
   action: AgentAction<TInput>,
   rule: PolicyRule | null = resolveRule(policy, action.tool),
 ): ProofRequest<TInput> {
@@ -137,7 +139,7 @@ export function buildProofRequestFromPolicy<TInput = unknown>(
   };
 }
 
-export function resolveRule(policy: PermitRailPolicy | undefined, tool: string): PolicyRule | null {
+export function resolveRule(policy: ProofrailPolicy | undefined, tool: string): PolicyRule | null {
   return policy?.tools?.[tool] || policy?.tools?.['*'] || null;
 }
 

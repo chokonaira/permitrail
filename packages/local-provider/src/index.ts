@@ -1,23 +1,23 @@
 import {
   createActionReceipt,
-  createPermitRailKeyPair,
+  createProofrailKeyPair,
   createId,
   createProof,
-} from '@permitrail/core';
+} from '@proofrail/core';
 import type {
   ActionReceiptPayload,
   AssuranceLevel,
   JsonValue,
-  PermitRailKeyPair,
+  ProofrailKeyPair,
   ProofChallenge,
   ProofPayload,
   ProofRequest,
   SignedEnvelope,
-} from '@permitrail/core';
+} from '@proofrail/core';
 
 export interface LocalApprovalProviderOptions {
   readonly provider?: string;
-  readonly keyPair?: PermitRailKeyPair;
+  readonly keyPair: ProofrailKeyPair;
 }
 
 export interface ApproveProofOptions {
@@ -33,13 +33,24 @@ export interface DenyProofOptions {
 
 export class LocalApprovalProvider {
   readonly provider: string;
-  readonly keyPair: PermitRailKeyPair;
+  readonly keyPair: ProofrailKeyPair;
   readonly challenges: Map<string, ProofChallenge>;
 
-  constructor(options: LocalApprovalProviderOptions = {}) {
-    this.provider = options.provider || 'permitrail-local';
-    this.keyPair = options.keyPair || createPermitRailKeyPair({ kid: `${this.provider}-dev` });
+  constructor(options: LocalApprovalProviderOptions) {
+    if (!options?.keyPair?.privateKeyPem) {
+      throw new Error(
+        'LocalApprovalProvider requires a keyPair. Use "await LocalApprovalProvider.create()" to generate one, or pass your own.',
+      );
+    }
+    this.provider = options.provider || 'proofrail-local';
+    this.keyPair = options.keyPair;
     this.challenges = new Map();
+  }
+
+  static async create(options: { readonly provider?: string } = {}): Promise<LocalApprovalProvider> {
+    const provider = options.provider || 'proofrail-local';
+    const keyPair = await createProofrailKeyPair({ kid: `${provider}-dev` });
+    return new LocalApprovalProvider({ provider, keyPair });
   }
 
   get publicKeyPem() {
@@ -55,7 +66,7 @@ export class LocalApprovalProvider {
         ...input,
         requestId: input.requestId || createId('request'),
       },
-      approvalUrl: `permitrail://approve/${createId('approval')}`,
+      approvalUrl: `proofrail://approve/${createId('approval')}`,
       createdAt: new Date().toISOString(),
     };
 
@@ -68,7 +79,7 @@ export class LocalApprovalProvider {
     options: ApproveProofOptions = {},
   ): Promise<SignedEnvelope<ProofPayload>> {
     const challenge = this.#getPendingChallenge(challengeId);
-    const proofEnvelope = createProof(
+    const proofEnvelope = await createProof(
       {
         ...challenge.request,
         id: createId('proof'),

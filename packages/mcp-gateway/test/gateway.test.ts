@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { PermitRailGateway, createPermitRailMcpTools } from '../src/index.ts';
-import { LocalApprovalProvider } from '@permitrail/provider-local';
-import type { PermitRailPolicy } from '@permitrail/core';
+import { ProofrailGateway, createProofrailMcpTools } from '../src/index.ts';
+import { LocalApprovalProvider } from '@proofrail/provider-local';
+import { createProofrailKeyPair } from '@proofrail/core';
+import type { ProofrailPolicy } from '@proofrail/core';
 
 const policy = {
-  version: 'permitrail.policy.v1',
+  version: 'proofrail.policy.v1',
   id: 'gateway-test',
   tools: {
     'database.delete_rows': {
@@ -19,15 +20,27 @@ const policy = {
       },
     },
   },
-} satisfies PermitRailPolicy;
+} satisfies ProofrailPolicy;
 
-test('gateway returns proof challenge when tool call is not authorized yet', async () => {
-  const provider = new LocalApprovalProvider();
-  const gateway = new PermitRailGateway({
+async function buildGateway() {
+  const provider = await LocalApprovalProvider.create();
+  const receiptKeyPair = await createProofrailKeyPair({ kid: 'gateway-test-receipts' });
+  const gateway = new ProofrailGateway({
     policy,
     provider,
     trustedProofKeys: [provider.publicKeyPem],
+    receiptKeyPair,
   });
+  return { provider, gateway };
+}
+
+test('gateway requires a receipt key pair', () => {
+  // @ts-expect-error receiptKeyPair is required
+  assert.throws(() => new ProofrailGateway({ policy }), /receiptKeyPair/);
+});
+
+test('gateway returns proof challenge when tool call is not authorized yet', async () => {
+  const { gateway } = await buildGateway();
 
   const decision = await gateway.authorize({
     tool: 'database.delete_rows',
@@ -44,16 +57,44 @@ test('gateway returns proof challenge when tool call is not authorized yet', asy
   assert.ok(decision.challenge.id);
 });
 
-test('mcp tools authorize calls and expose challenge status', async () => {
-  const provider = new LocalApprovalProvider();
-  const gateway = new PermitRailGateway({
-    policy,
-    provider,
-    trustedProofKeys: [provider.publicKeyPem],
-  });
-  const mcp = createPermitRailMcpTools({ gateway, provider });
+test('gateway executes a tool only after a bound proof and writes a receipt', async () => {
+  const { provider, gateway } = await buildGateway();
+  const action = {
+    tool: 'database.delete_rows',
+    audience: 'db-agent',
+    subject: 'admin_1',
+    purpose: 'Delete expired sandbox rows',
+    input: { table: 'sandbox_events', where: { expired: true } },
+  };
 
-  const decision = await mcp.callTool('permitrail_authorize_tool_call', {
+  const pending = await gateway.authorize(action);
+  if (pending.outcome !== 'require_proof' || !pending.challenge) {
+    throw new Error('Expected proof challenge');
+  }
+
+  const proofEnvelope = await provider.approve(pending.challenge.id, { approvedBy: 'admin_1' });
+
+  let ran = false;
+  const result = await gateway.execute(
+    action,
+    () => {
+      ran = true;
+      return { deleted: 3 };
+    },
+    { proofEnvelope },
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(ran, true);
+  assert.equal(result.receipt.payload.decision, 'allowed');
+  assert.ok(result.receipt.payload.inputHash);
+});
+
+test('mcp tools authorize calls and expose challenge status', async () => {
+  const { provider, gateway } = await buildGateway();
+  const mcp = createProofrailMcpTools({ gateway, provider });
+
+  const decision = await mcp.callTool('proofrail_authorize_tool_call', {
     action: {
       tool: 'database.delete_rows',
       audience: 'db-agent',
@@ -65,13 +106,13 @@ test('mcp tools authorize calls and expose challenge status', async () => {
 
   assert.equal(typeof decision, 'object');
   assert.ok(decision);
-  const authorization = decision as Awaited<ReturnType<PermitRailGateway['authorize']>>;
+  const authorization = decision as Awaited<ReturnType<ProofrailGateway['authorize']>>;
   assert.equal(authorization.outcome, 'require_proof');
   if (authorization.outcome !== 'require_proof' || !authorization.challenge) {
     throw new Error('Expected proof challenge');
   }
 
-  const challenge = await mcp.callTool('permitrail_get_challenge', {
+  const challenge = await mcp.callTool('proofrail_get_challenge', {
     challengeId: authorization.challenge.id,
   });
 

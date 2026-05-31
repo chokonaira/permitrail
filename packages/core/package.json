@@ -1,8 +1,8 @@
 {
-  "name": "@permitrail/core",
+  "name": "@proofrail/core",
   "version": "0.1.0",
   "type": "module",
-  "description": "Core proof, policy, and receipt primitives for PermitRail.",
+  "description": "Core proof, policy, and receipt primitives for Proofrail.",
   "license": "Apache-2.0",
   "types": "./src/index.ts",
   "exports": {

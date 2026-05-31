@@ -1,19 +1,19 @@
 # Integration Guide
 
-PermitRail has three integration paths.
+Proofrail has three integration paths.
 
 ## 1. TypeScript SDK
 
 Use the SDK when your agent runtime or tool gateway runs in TypeScript.
 
 ```txt
-agent runtime -> PermitRailGateway -> tool adapter
+agent runtime -> ProofrailGateway -> tool adapter
 ```
 
 Flow:
 
 1. Define a policy for risky tools.
-2. Wrap tool execution with `PermitRailGateway`.
+2. Wrap tool execution with `ProofrailGateway`.
 3. Call `authorize(action)` before the tool runs.
 4. If the result is `require_proof`, send the challenge to a provider.
 5. Call `execute(action, handler, { proofEnvelope })`.
@@ -26,7 +26,7 @@ without requiring external accounts.
 
 Use the MCP surface when an agent reaches tools through an MCP server.
 
-PermitRail exposes a dependency-free router:
+Proofrail exposes a dependency-free router:
 
 - tool definitions
 - JSON input schemas
@@ -36,15 +36,15 @@ Register these tools with your MCP server, then let the agent request
 authorization before calling sensitive tools.
 
 ```ts
-import { createPermitRailMcpTools } from '@permitrail/mcp-gateway';
+import { createProofrailMcpTools } from '@proofrail/mcp-gateway';
 
-const permitrail = createPermitRailMcpTools({ gateway, provider });
+const proofrail = createProofrailMcpTools({ gateway, provider });
 
-for (const tool of permitrail.tools) {
+for (const tool of proofrail.tools) {
   server.registerTool(tool.name, {
     description: tool.description,
     inputSchema: tool.inputSchema,
-  }, async (input) => permitrail.callTool(tool.name, input));
+  }, async (input) => proofrail.callTool(tool.name, input));
 }
 ```
 
@@ -52,10 +52,10 @@ Recommended runtime pattern:
 
 ```txt
 Agent
-  -> permitrail_authorize_tool_call
+  -> proofrail_authorize_tool_call
   -> approval provider if proof is required
-  -> sensitive tool only after PermitRail allows
-  -> permitrail_write_receipt
+  -> sensitive tool only after Proofrail allows
+  -> proofrail_write_receipt
 ```
 
 ## 3. Other Languages
@@ -73,8 +73,8 @@ The portable contract is:
 
 Two options are planned:
 
-- run PermitRail as an HTTP sidecar
-- implement the protocol directly from `spec/permitrail.schema.json`
+- run Proofrail as an HTTP sidecar
+- implement the protocol directly from `spec/proofrail.schema.json`
 
 Planned HTTP sidecar endpoints:
 

@@ -1,7 +1,7 @@
 export { canonicalize, stableStringify } from './canonical-json.ts';
-export { PermitRailError, invariant } from './errors.ts';
+export { ProofrailError, invariant } from './errors.ts';
 export {
-  createPermitRailKeyPair,
+  createProofrailKeyPair,
   createId,
   randomId,
   sha256,
@@ -38,8 +38,8 @@ export type {
   JsonObject,
   JsonPrimitive,
   JsonValue,
-  PermitRailKeyPair,
-  PermitRailPolicy,
+  ProofrailKeyPair,
+  ProofrailPolicy,
   PolicyDecision,
   PolicyDecisionOutcome,
   PolicyRule,

@@ -1,22 +1,22 @@
-# PermitRail
+# Proofrail
 
-[![CI](https://github.com/chokonaira/permitrail/actions/workflows/test.yml/badge.svg)](https://github.com/chokonaira/permitrail/actions/workflows/test.yml)
+[![CI](https://github.com/chokonaira/proofrail/actions/workflows/test.yml/badge.svg)](https://github.com/chokonaira/proofrail/actions/workflows/test.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6.svg)](tsconfig.json)
 
 **Proof-gated tool calls for AI agents.**
 
-PermitRail is an open-source permission layer for agents that use tools. It
+Proofrail is an open-source permission layer for agents that use tools. It
 sits between the agent and sensitive actions, requires a short-lived
 purpose-bound proof when policy says approval is needed, then writes a signed
 receipt for the audit trail.
 
-[Hosted sandbox](https://chokonaira.github.io/permitrail/) ·
+[Hosted sandbox](https://chokonaira.github.io/proofrail/) ·
 [Integration guide](docs/integration.md) ·
-[Protocol schema](spec/permitrail.schema.json)
+[Protocol schema](spec/proofrail.schema.json)
 
 ```txt
-Agent -> PermitRail -> email.send / payments.create_transfer / github.merge_pr / database.delete_rows
+Agent -> Proofrail -> email.send / payments.create_transfer / github.merge_pr / database.delete_rows
 ```
 
 ## Why
@@ -29,7 +29,7 @@ money. The hard question is no longer only "can the model call the tool?" It is:
 - can a proof be replayed against a different recipient, amount, branch, or row?
 - can the team audit what happened after the agent acted?
 
-PermitRail gives developers a small, inspectable control point for those
+Proofrail gives developers a small, inspectable control point for those
 questions.
 
 ## What It Provides
@@ -52,8 +52,8 @@ Requirements:
 - npm
 
 ```bash
-git clone https://github.com/chokonaira/permitrail.git
-cd permitrail
+git clone https://github.com/chokonaira/proofrail.git
+cd proofrail
 npm install
 npm run check
 ```
@@ -69,14 +69,14 @@ npm run demo
 ## Use In TypeScript
 
 ```ts
-import type { AgentAction, PermitRailPolicy } from '@permitrail/core';
-import { LocalApprovalProvider } from '@permitrail/provider-local';
-import { PermitRailGateway } from '@permitrail/mcp-gateway';
+import type { AgentAction, ProofrailPolicy } from '@proofrail/core';
+import { LocalApprovalProvider } from '@proofrail/provider-local';
+import { ProofrailGateway } from '@proofrail/mcp-gateway';
 
 const provider = new LocalApprovalProvider();
 
 const policy = {
-  version: 'permitrail.policy.v1',
+  version: 'proofrail.policy.v1',
   id: 'agent-policy',
   defaults: { unconfiguredTool: 'deny' },
   tools: {
@@ -91,9 +91,9 @@ const policy = {
       },
     },
   },
-} satisfies PermitRailPolicy;
+} satisfies ProofrailPolicy;
 
-const gateway = new PermitRailGateway({
+const gateway = new ProofrailGateway({
   policy,
   provider,
   trustedProofKeys: [provider.publicKeyPem],
@@ -114,7 +114,7 @@ const decision = await gateway.authorize(action);
 
 if (decision.outcome === 'require_proof') {
   if (!decision.challenge) {
-    throw new Error('PermitRail did not return an approval challenge');
+    throw new Error('Proofrail did not return an approval challenge');
   }
 
   const proof = await provider.approve(decision.challenge.id);
@@ -125,29 +125,29 @@ if (decision.outcome === 'require_proof') {
 
 ## Plug Into MCP
 
-PermitRail exposes MCP-ready tool definitions without forcing a specific MCP
+Proofrail exposes MCP-ready tool definitions without forcing a specific MCP
 server package. Register the tools with your server, then route tool calls
-through PermitRail before the agent reaches sensitive adapters.
+through Proofrail before the agent reaches sensitive adapters.
 
 ```ts
-import { createPermitRailMcpTools } from '@permitrail/mcp-gateway';
+import { createProofrailMcpTools } from '@proofrail/mcp-gateway';
 
-const permitrail = createPermitRailMcpTools({ gateway, provider });
+const proofrail = createProofrailMcpTools({ gateway, provider });
 
-for (const tool of permitrail.tools) {
+for (const tool of proofrail.tools) {
   server.registerTool(tool.name, {
     description: tool.description,
     inputSchema: tool.inputSchema,
-  }, async (input) => permitrail.callTool(tool.name, input));
+  }, async (input) => proofrail.callTool(tool.name, input));
 }
 ```
 
 Core MCP tools:
 
-- `permitrail_authorize_tool_call`
-- `permitrail_get_challenge`
-- `permitrail_verify_proof`
-- `permitrail_write_receipt`
+- `proofrail_authorize_tool_call`
+- `proofrail_get_challenge`
+- `proofrail_verify_proof`
+- `proofrail_write_receipt`
 
 ## Approval Providers
 
@@ -167,7 +167,7 @@ provider issues the same proof envelope.
 
 ## Other Stacks
 
-PermitRail starts with a TypeScript SDK, but the protocol is portable:
+Proofrail starts with a TypeScript SDK, but the protocol is portable:
 
 - policies are JSON
 - proofs are signed JSON envelopes

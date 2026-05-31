@@ -7,7 +7,7 @@ import type {
   CreateActionReceiptInput,
   CreateProofInput,
   DateInput,
-  PermitRailKeyPair,
+  ProofrailKeyPair,
   ProofAction,
   ProofPayload,
   SignedEnvelope,
@@ -15,8 +15,8 @@ import type {
   VerifyProofOptions,
 } from './types.ts';
 
-export const PROOF_KIND = 'permitrail.proof.v1';
-export const ACTION_RECEIPT_KIND = 'permitrail.action_receipt.v1';
+export const PROOF_KIND = 'proofrail.proof.v1';
+export const ACTION_RECEIPT_KIND = 'proofrail.action_receipt.v1';
 
 export const ASSURANCE_LEVELS = Object.freeze([
   'self_attested',
@@ -24,13 +24,13 @@ export const ASSURANCE_LEVELS = Object.freeze([
   'human_approved',
   'provider_verified',
   'credential_verified',
-  'qualified_trust',
+  'high_assurance',
 ]) satisfies readonly AssuranceLevel[];
 
-export function createProof<TInput = unknown>(
+export async function createProof<TInput = unknown>(
   input: CreateProofInput<TInput>,
-  keyPair: PermitRailKeyPair,
-): SignedEnvelope<ProofPayload> {
+  keyPair: ProofrailKeyPair,
+): Promise<SignedEnvelope<ProofPayload>> {
   const now = toDate(input.now || new Date());
   const ttlSeconds = input.ttlSeconds ?? 5 * 60;
   invariant(ttlSeconds > 0 && ttlSeconds <= 24 * 60 * 60, 'INVALID_TTL', 'Proof ttl must be between 1 second and 24 hours');
@@ -42,6 +42,9 @@ export function createProof<TInput = unknown>(
   invariant(input.audience, 'MISSING_AUDIENCE', 'Proof audience is required');
   invariant(input.purpose, 'MISSING_PURPOSE', 'Proof purpose is required');
   invariant(input.provider, 'MISSING_PROVIDER', 'Proof provider is required');
+
+  const actionInputHash = input.action?.input === undefined ? undefined : await sha256(input.action.input);
+  const evidenceHash = input.evidence === undefined ? undefined : await sha256(input.evidence);
 
   const payload: ProofPayload = {
     kind: PROOF_KIND,
@@ -59,19 +62,19 @@ export function createProof<TInput = unknown>(
     issuedAt: now.toISOString(),
     expiresAt: new Date(now.getTime() + ttlSeconds * 1000).toISOString(),
     action: input.action ? normalizeActionForProof(input.action) : undefined,
-    actionInputHash: input.action?.input === undefined ? undefined : sha256(input.action.input),
-    evidenceHash: input.evidence === undefined ? undefined : sha256(input.evidence),
+    actionInputHash,
+    evidenceHash,
     metadata: input.metadata,
   };
 
   return signEnvelope(payload, keyPair);
 }
 
-export function verifyProof(
+export async function verifyProof(
   envelope: SignedEnvelope<ProofPayload>,
   options: VerifyProofOptions,
-): ProofPayload {
-  const payload = verifyEnvelope(envelope, options.publicKeyPem, { kind: PROOF_KIND, kid: options.kid });
+): Promise<ProofPayload> {
+  const payload = await verifyEnvelope(envelope, options.publicKeyPem, { kind: PROOF_KIND, kid: options.kid });
   const now = toDate(options.now || new Date());
 
   invariant(new Date(payload.expiresAt).getTime() > now.getTime(), 'PROOF_EXPIRED', 'Proof has expired');
@@ -103,16 +106,18 @@ export function verifyProof(
   return payload;
 }
 
-export function createActionReceipt<TInput = unknown>(
+export async function createActionReceipt<TInput = unknown>(
   input: CreateActionReceiptInput<TInput>,
-  keyPair: PermitRailKeyPair,
-): SignedEnvelope<ActionReceiptPayload> {
+  keyPair: ProofrailKeyPair,
+): Promise<SignedEnvelope<ActionReceiptPayload>> {
   invariant(input.action?.tool, 'MISSING_TOOL', 'Receipt action tool is required');
   invariant(input.action?.purpose, 'MISSING_PURPOSE', 'Receipt action purpose is required');
   invariant(input.decision, 'MISSING_DECISION', 'Receipt decision is required');
 
   const now = toDate(input.now || new Date());
   const proofPayload = input.proofEnvelope?.payload;
+  const inputHash = input.action.input === undefined ? undefined : await sha256(input.action.input);
+
   const payload: ActionReceiptPayload = {
     kind: ACTION_RECEIPT_KIND,
     id: input.id || createId('receipt'),
@@ -123,7 +128,7 @@ export function createActionReceipt<TInput = unknown>(
     proofId: proofPayload?.id,
     proofClaim: proofPayload?.claim,
     proofAssurance: proofPayload?.assurance,
-    inputHash: input.action.input === undefined ? undefined : sha256(input.action.input),
+    inputHash,
     issuedAt: now.toISOString(),
     metadata: input.metadata,
   };
@@ -131,10 +136,10 @@ export function createActionReceipt<TInput = unknown>(
   return signEnvelope(payload, keyPair);
 }
 
-export function verifyActionReceipt(
+export async function verifyActionReceipt(
   envelope: SignedEnvelope<ActionReceiptPayload>,
   options: VerifyActionReceiptOptions,
-): ActionReceiptPayload {
+): Promise<ActionReceiptPayload> {
   return verifyEnvelope(envelope, options.publicKeyPem, {
     kind: ACTION_RECEIPT_KIND,
     kid: options.kid,

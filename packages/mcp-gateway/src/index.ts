@@ -2,26 +2,28 @@ import {
   DEFAULT_POLICY,
   buildProofRequestFromPolicy,
   createActionReceipt,
-  createPermitRailKeyPair,
   evaluatePolicy,
   verifyProof,
-} from '@permitrail/core';
+} from '@proofrail/core';
 import type {
   ActionReceiptPayload,
   AgentAction,
-  PermitRailKeyPair,
-  PermitRailPolicy,
+  ProofrailKeyPair,
+  ProofrailPolicy,
   PolicyDecision,
   ProofChallenge,
   ProofPayload,
   ProofProvider,
   SignedEnvelope,
-} from '@permitrail/core';
+} from '@proofrail/core';
 
-export interface PermitRailGatewayOptions {
-  readonly policy?: PermitRailPolicy;
+export interface ProofrailGatewayOptions {
+  readonly policy?: ProofrailPolicy;
   readonly provider?: ProofProvider;
-  readonly receiptKeyPair?: PermitRailKeyPair;
+  // Required. Generate once with createProofrailKeyPair() and persist it so
+  // receipts stay verifiable across restarts. A gateway that mints a throwaway
+  // key on every boot produces an audit trail nobody can later verify.
+  readonly receiptKeyPair: ProofrailKeyPair;
   readonly trustedProofKeys?: readonly string[];
 }
 
@@ -46,7 +48,7 @@ export interface GatewayExecutionResult<TInput = unknown, TResult = unknown> {
 }
 
 export interface McpToolDefinition {
-  readonly name: PermitRailMcpToolName;
+  readonly name: ProofrailMcpToolName;
   readonly description: string;
   readonly inputSchema: {
     readonly type: 'object';
@@ -56,32 +58,37 @@ export interface McpToolDefinition {
   };
 }
 
-export interface PermitRailMcpToolsOptions {
-  readonly gateway: PermitRailGateway;
+export interface ProofrailMcpToolsOptions {
+  readonly gateway: ProofrailGateway;
   readonly provider?: ProofProvider;
 }
 
-export type PermitRailMcpToolName =
-  | 'permitrail_authorize_tool_call'
-  | 'permitrail_get_challenge'
-  | 'permitrail_verify_proof'
-  | 'permitrail_write_receipt';
+export type ProofrailMcpToolName =
+  | 'proofrail_authorize_tool_call'
+  | 'proofrail_get_challenge'
+  | 'proofrail_verify_proof'
+  | 'proofrail_write_receipt';
 
-export interface PermitRailMcpToolRouter {
+export interface ProofrailMcpToolRouter {
   readonly tools: readonly McpToolDefinition[];
-  callTool(name: PermitRailMcpToolName, input: Record<string, unknown>): Promise<unknown>;
+  callTool(name: ProofrailMcpToolName, input: Record<string, unknown>): Promise<unknown>;
 }
 
-export class PermitRailGateway {
-  readonly policy?: PermitRailPolicy;
+export class ProofrailGateway {
+  readonly policy?: ProofrailPolicy;
   readonly provider?: ProofProvider;
-  readonly receiptKeyPair: PermitRailKeyPair;
+  readonly receiptKeyPair: ProofrailKeyPair;
   readonly trustedProofKeys: readonly string[];
 
-  constructor(options: PermitRailGatewayOptions = {}) {
+  constructor(options: ProofrailGatewayOptions) {
+    if (!options?.receiptKeyPair?.privateKeyPem) {
+      throw new Error(
+        'ProofrailGateway requires a receiptKeyPair. Generate one with createProofrailKeyPair() and persist it so receipts stay verifiable across restarts.',
+      );
+    }
     this.policy = options.policy;
     this.provider = options.provider;
-    this.receiptKeyPair = options.receiptKeyPair || createPermitRailKeyPair({ kid: 'permitrail-gateway-dev' });
+    this.receiptKeyPair = options.receiptKeyPair;
     this.trustedProofKeys = options.trustedProofKeys || [];
   }
 
@@ -96,7 +103,7 @@ export class PermitRailGateway {
     if (options.proofEnvelope) {
       for (const publicKeyPem of this.trustedProofKeys) {
         try {
-          verifiedProof = verifyProof(options.proofEnvelope, {
+          verifiedProof = await verifyProof(options.proofEnvelope, {
             publicKeyPem,
             audience: action.audience,
             subject: action.subject,
@@ -113,7 +120,7 @@ export class PermitRailGateway {
     }
 
     const activePolicy = this.policy || DEFAULT_POLICY;
-    const decision = evaluatePolicy(activePolicy, action, options.proofEnvelope, {
+    const decision = await evaluatePolicy(activePolicy, action, options.proofEnvelope, {
       publicKeyPem: matchedPublicKeyPem,
       audience: action.audience,
       subject: action.subject,
@@ -145,7 +152,7 @@ export class PermitRailGateway {
     const authorization = await this.authorize(action, options);
 
     if (!authorization.allowed) {
-      const receipt = createActionReceipt(
+      const receipt = await createActionReceipt(
         {
           action,
           decision: authorization.outcome,
@@ -164,7 +171,7 @@ export class PermitRailGateway {
     }
 
     const result = await handler(action.input);
-    const receipt = createActionReceipt(
+    const receipt = await createActionReceipt(
       {
         action,
         decision: 'allowed',
@@ -186,7 +193,7 @@ export class PermitRailGateway {
 
 export const MCP_TOOL_DEFINITIONS: readonly McpToolDefinition[] = Object.freeze([
   {
-    name: 'permitrail_authorize_tool_call',
+    name: 'proofrail_authorize_tool_call',
     description: 'Authorize an agent tool call and request proof when policy requires it.',
     inputSchema: {
       type: 'object',
@@ -199,7 +206,7 @@ export const MCP_TOOL_DEFINITIONS: readonly McpToolDefinition[] = Object.freeze(
     },
   },
   {
-    name: 'permitrail_get_challenge',
+    name: 'proofrail_get_challenge',
     description: 'Read the status of a pending, approved, or denied proof challenge.',
     inputSchema: {
       type: 'object',
@@ -211,8 +218,8 @@ export const MCP_TOOL_DEFINITIONS: readonly McpToolDefinition[] = Object.freeze(
     },
   },
   {
-    name: 'permitrail_verify_proof',
-    description: 'Verify a signed PermitRail proof envelope.',
+    name: 'proofrail_verify_proof',
+    description: 'Verify a signed Proofrail proof envelope.',
     inputSchema: {
       type: 'object',
       required: ['proofEnvelope'],
@@ -224,7 +231,7 @@ export const MCP_TOOL_DEFINITIONS: readonly McpToolDefinition[] = Object.freeze(
     },
   },
   {
-    name: 'permitrail_write_receipt',
+    name: 'proofrail_write_receipt',
     description: 'Create a signed receipt for an allowed, blocked, or denied action.',
     inputSchema: {
       type: 'object',
@@ -241,31 +248,31 @@ export const MCP_TOOL_DEFINITIONS: readonly McpToolDefinition[] = Object.freeze(
   },
 ]);
 
-export function createPermitRailMcpTools(options: PermitRailMcpToolsOptions): PermitRailMcpToolRouter {
+export function createProofrailMcpTools(options: ProofrailMcpToolsOptions): ProofrailMcpToolRouter {
   return {
     tools: MCP_TOOL_DEFINITIONS,
     async callTool(name, input) {
       switch (name) {
-        case 'permitrail_authorize_tool_call':
+        case 'proofrail_authorize_tool_call':
           return options.gateway.authorize(
             input.action as AgentAction,
             { proofEnvelope: input.proofEnvelope as SignedEnvelope<ProofPayload> | undefined },
           );
 
-        case 'permitrail_get_challenge':
+        case 'proofrail_get_challenge':
           if (!options.provider?.getChallenge) {
-            throw new Error('This PermitRail provider does not expose challenge lookup');
+            throw new Error('This Proofrail provider does not expose challenge lookup');
           }
           return options.provider.getChallenge(String(input.challengeId));
 
-        case 'permitrail_verify_proof':
+        case 'proofrail_verify_proof':
           return verifyWithTrustedKeys(
             options.gateway.trustedProofKeys,
             input.proofEnvelope as SignedEnvelope<ProofPayload>,
             typeof input.publicKeyPem === 'string' ? input.publicKeyPem : undefined,
           );
 
-        case 'permitrail_write_receipt':
+        case 'proofrail_write_receipt':
           return createActionReceipt(
             {
               action: input.action as AgentAction,
@@ -278,24 +285,24 @@ export function createPermitRailMcpTools(options: PermitRailMcpToolsOptions): Pe
           );
 
         default:
-          throw new Error(`Unknown PermitRail MCP tool: ${String(name)}`);
+          throw new Error(`Unknown Proofrail MCP tool: ${String(name)}`);
       }
     },
   };
 }
 
-function verifyWithTrustedKeys(
+async function verifyWithTrustedKeys(
   trustedProofKeys: readonly string[],
   proofEnvelope: SignedEnvelope<ProofPayload>,
   explicitPublicKeyPem?: string,
-): { readonly ok: true; readonly proof: ProofPayload } | { readonly ok: false; readonly error: string } {
+): Promise<{ readonly ok: true; readonly proof: ProofPayload } | { readonly ok: false; readonly error: string }> {
   const keys = explicitPublicKeyPem ? [explicitPublicKeyPem] : trustedProofKeys;
 
   for (const publicKeyPem of keys) {
     try {
       return {
         ok: true,
-        proof: verifyProof(proofEnvelope, { publicKeyPem }),
+        proof: await verifyProof(proofEnvelope, { publicKeyPem }),
       };
     } catch {
       continue;

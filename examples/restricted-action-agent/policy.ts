@@ -1,7 +1,7 @@
-import type { PermitRailPolicy } from '@permitrail/core';
+import type { ProofrailPolicy } from '@proofrail/core';
 
 export const policy = {
-  version: 'permitrail.policy.v1',
+  version: 'proofrail.policy.v1',
   id: 'restricted-action-demo',
   defaults: {
     unconfiguredTool: 'deny',
@@ -38,4 +38,4 @@ export const policy = {
       reason: 'Read-only calendar access is allowed in this demo policy.',
     },
   },
-} satisfies PermitRailPolicy;
+} satisfies ProofrailPolicy;

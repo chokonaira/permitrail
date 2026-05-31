@@ -1,6 +1,6 @@
 # Code of Conduct
 
-PermitRail is a technical project for building safer agent systems. Discussion
+Proofrail is a technical project for building safer agent systems. Discussion
 should stay direct, respectful, and grounded in evidence.
 
 Expected behavior:
