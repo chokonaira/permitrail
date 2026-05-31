@@ -47,8 +47,13 @@ const policy = {
 const scenarios = {
   email: {
     glyph: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>',
-    title: 'Send an invoice email',
-    sub: 'email.send · medium risk',
+    title: 'Approve a customer invoice email',
+    sub: 'Medium risk · external message',
+    summary: 'The sales agent wants to email invoice INV-123 to an existing customer.',
+    recommendation: 'approve if the recipient and invoice match',
+    recommendedDecision: 'approve',
+    approveLabel: 'Approve invoice email',
+    denyLabel: 'Deny email send',
     action: {
       tool: 'email.send',
       audience: 'sales-agent',
@@ -56,27 +61,37 @@ const scenarios = {
       purpose: 'Send invoice INV-123 to client@example.com',
       risk: 'medium',
       chainId: 'chain_sandbox',
-      input: { to: 'client@example.com', subject: 'Invoice INV-123' },
+      input: { to: 'client@example.com', subject: 'Invoice INV-123', attachment: 'inv-123.pdf' },
     },
   },
   payment: {
     glyph: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="12" x="2" y="6" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/></svg>',
-    title: 'Wire $5,000 from an email instruction',
-    sub: 'payments.create_transfer · high risk',
+    title: 'Reject a suspicious payment request',
+    sub: 'High risk · money movement',
+    summary: 'An untrusted email tells the finance agent to send 5,000 USD to a new account.',
+    recommendation: 'deny because the recipient is not verified',
+    recommendedDecision: 'deny',
+    approveLabel: 'Approve transfer anyway',
+    denyLabel: 'Deny suspicious transfer',
     action: {
       tool: 'payments.create_transfer',
       audience: 'finance-agent',
       subject: 'user_henry',
-      purpose: 'Transfer 5000 USD to acct_attacker (source: untrusted email)',
+      purpose: 'Transfer 5,000 USD to acct_new_vendor from an untrusted email',
       risk: 'high',
       chainId: 'chain_sandbox',
-      input: { amount: 5000, currency: 'USD', recipient: 'acct_attacker' },
+      input: { amount: 5000, currency: 'USD', recipient: 'acct_new_vendor', source: 'untrusted_email' },
     },
   },
   delete: {
     glyph: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></svg>',
-    title: 'Delete production rows',
-    sub: 'database.delete_rows · high risk',
+    title: 'Approve a production cleanup',
+    sub: 'High risk · database mutation',
+    summary: 'An ops agent wants to delete expired rows after an admin reviewed the exact filter.',
+    recommendation: 'approve only after checking the table and filter',
+    recommendedDecision: 'approve',
+    approveLabel: 'Approve cleanup',
+    denyLabel: 'Deny deletion',
     action: {
       tool: 'database.delete_rows',
       audience: 'db-agent',
@@ -90,9 +105,9 @@ const scenarios = {
 };
 
 const toolResults = {
-  'email.send': { delivered: true, messageId: 'msg_8f21c' },
-  'payments.create_transfer': { transferId: 'txn_2bd90', status: 'submitted' },
-  'database.delete_rows': { deleted: 1204 },
+  'email.send': { simulated: true, delivered: true, messageId: 'msg_8f21c' },
+  'payments.create_transfer': { simulated: true, transferId: 'txn_sandbox_only', status: 'would_submit' },
+  'database.delete_rows': { simulated: true, deleted: 1204 },
 };
 
 let gateway;
@@ -120,14 +135,21 @@ async function init() {
 function renderScenarios() {
   const host = $('scenarios');
   host.innerHTML = '';
+  let firstButton = null;
   for (const [key, scn] of Object.entries(scenarios)) {
     const btn = document.createElement('button');
+    btn.type = 'button';
     btn.className = 'scn';
     btn.setAttribute('aria-selected', 'false');
-    btn.innerHTML = `<span class="glyph">${scn.glyph}</span><span><div>${scn.title}</div><div class="scn-sub">${scn.sub}</div></span>`;
+    btn.innerHTML =
+      `<span class="glyph">${scn.glyph}</span>` +
+      `<span class="scn-copy"><span class="scn-title">${scn.title}</span><span class="scn-sub">${scn.sub}</span></span>` +
+      `<span class="scn-decision" data-decision="${scn.recommendedDecision}">${scn.recommendedDecision}</span>`;
     btn.addEventListener('click', () => selectScenario(key, btn));
     host.appendChild(btn);
+    firstButton ??= btn;
   }
+  if (firstButton) selectScenario('email', firstButton);
 }
 
 function selectScenario(key, btn) {
@@ -137,22 +159,32 @@ function selectScenario(key, btn) {
   for (const el of document.querySelectorAll('.scn')) el.setAttribute('aria-selected', 'false');
   btn.setAttribute('aria-selected', 'true');
 
-  const { action } = scenarios[key];
+  const scenario = scenarios[key];
+  const { action } = scenario;
   $('acTool').textContent = action.tool;
   const risk = $('acRisk');
   risk.textContent = action.risk;
   risk.dataset.risk = action.risk;
+  $('acSummary').textContent = scenario.summary;
+  $('acRecommendation').textContent = scenario.recommendation;
   $('acPurpose').textContent = action.purpose;
   showJson($('acInput'), action.input);
+  $('inputDetails').open = !isSmallScreen();
+  $('approveBtn').textContent = scenario.approveLabel;
+  $('denyBtn').textContent = scenario.denyLabel;
+  $('approveBtn').dataset.recommended = scenario.recommendedDecision === 'approve' ? 'true' : 'false';
+  $('denyBtn').dataset.recommended = scenario.recommendedDecision === 'deny' ? 'true' : 'false';
 
   resetRail();
   setVerdict('idle', 'ready');
-  showJson($('output'), '// send it through the gate to see the signed proof and receipt', true);
+  note('readoutHint', 'select a CTA to move through the proof flow');
+  showJson($('output'), '// Run the policy check to see whether this action needs proof.', true);
   const run = $('runBtn');
   run.disabled = false;
-  run.textContent = 'send through the gate →';
+  run.textContent = 'Run policy check';
   hide('approveActions');
   hide('executeActions');
+  $('executeBtn').removeAttribute('hidden');
   hide('replayBtn');
 }
 
@@ -170,22 +202,27 @@ async function run() {
     setStage('authorize', 'done');
     setStage('approve', 'active');
     note('st-authorize', 'policy: proof required for this tool');
+    note('readoutHint', 'approval is now required');
     showJson($('output'), {
       decision: decision.outcome,
       reason: decision.reason,
       policyId: decision.policyId,
       challenge: challenge.id,
       requires: challenge.request.claim,
+      next: scenarios[current].recommendation,
     });
     show('approveActions');
+    focusStep('approve');
   } else if (decision.outcome === 'allow') {
     setStage('authorize', 'done');
     setStage('approve', 'done');
     setStage('execute', 'active');
     show('executeActions');
+    focusStep('execute');
   } else {
     setStage('authorize', 'blocked');
     showJson($('output'), { decision: decision.outcome, reason: decision.reason });
+    focusOutput();
   }
 }
 
@@ -194,10 +231,12 @@ async function approve() {
   proof = await provider.approve(challenge.id, { approvedBy: 'you@sandbox' });
   setStage('approve', 'done');
   setStage('execute', 'active');
-  note('st-approve', 'human approved the exact action; proof signed');
+  note('st-approve', 'approved: proof signed for the exact action');
+  note('readoutHint', 'proof is ready; execute once');
   hide('approveActions');
   showJson($('output'), proofView(proof));
   show('executeActions');
+  focusStep('execute');
 }
 
 async function deny() {
@@ -205,10 +244,12 @@ async function deny() {
   const receipt = await provider.deny(challenge.id, { reason: 'User rejected this action.' });
   setStage('approve', 'blocked');
   setVerdict('blocked', 'blocked');
-  note('st-approve', 'human denied; signed denial receipt written');
+  note('st-approve', 'denied: signed denial receipt written');
+  note('readoutHint', 'denial receipt sealed');
   hide('approveActions');
   showJson($('output'), receiptView(receipt));
   addReceipt(receipt);
+  focusOutput();
 }
 
 async function execute() {
@@ -219,11 +260,13 @@ async function execute() {
   if (result.ok) {
     setStage('execute', 'done');
     setVerdict('allowed', 'allowed');
-    note('st-execute', 'tool ran once; signed receipt sealed');
+    note('st-execute', 'simulated tool ran once; signed receipt sealed');
+    note('readoutHint', 'try reusing the same proof');
     showJson($('output'), { result: result.result, receipt: receiptView(result.receipt) });
     addReceipt(result.receipt);
     $('executeBtn').setAttribute('hidden', '');
     show('replayBtn');
+    focusOutput();
   }
 }
 
@@ -234,10 +277,12 @@ async function replay() {
 
   setStage('execute', 'blocked');
   setVerdict('blocked', 'replay blocked');
-  note('st-execute', 'same proof, second time: refused');
+  note('st-execute', 'same proof, second attempt: refused');
+  note('readoutHint', 'single-use proof protection worked');
   showJson($('output'), { ok: result.ok, reason: result.receipt.payload.reason, receipt: receiptView(result.receipt) });
   addReceipt(result.receipt);
   $('replayBtn').setAttribute('hidden', '');
+  focusOutput();
 }
 
 /* ---- view helpers ---- */
@@ -301,8 +346,8 @@ function setStage(name, status) {
 function resetRail() {
   for (const el of document.querySelectorAll('.stage')) el.removeAttribute('data-status');
   note('st-authorize', 'policy evaluates the tool call');
-  note('st-approve', 'a human signs off on the exact action');
-  note('st-execute', 'tool runs, signed receipt is written');
+  note('st-approve', 'approve to mint proof, or deny to seal a receipt');
+  note('st-execute', 'approved actions run once, then write a receipt');
 }
 
 function note(id, text) {
@@ -323,13 +368,30 @@ function hide(id) {
   $(id).setAttribute('hidden', '');
 }
 
+function isSmallScreen() {
+  return window.matchMedia('(max-width: 720px)').matches;
+}
+
+function focusStep(stage) {
+  if (!isSmallScreen()) return;
+  document.querySelector(`.stage[data-stage="${stage}"]`)?.scrollIntoView({
+    behavior: 'smooth',
+    block: 'center',
+  });
+}
+
+function focusOutput() {
+  if (!isSmallScreen()) return;
+  $('output').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
 function showJson(el, obj, raw = false) {
   const text = raw && typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2);
   el.querySelector('code').innerHTML = highlight(text);
 }
 
 function highlight(input) {
-  const escaped = input.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const escaped = input.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   return escaped.replace(
     /("(?:\\.|[^"\\])*")(\s*:)?|\b(?:true|false|null)\b|-?\d+(?:\.\d+)?/g,
     (match, str, colon) => {
