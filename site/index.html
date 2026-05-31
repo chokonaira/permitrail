@@ -1,123 +1,132 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Proofrail Sandbox | Proof-gated tool calls for AI agents</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Proofrail Sandbox — authorize, prove, audit every agent action</title>
     <meta
       name="description"
-      content="Proofrail is a TypeScript-first permission layer for proof-gated AI agent tool calls, signed receipts, and auditable human approval."
-    >
-    <link rel="stylesheet" href="styles.css">
+      content="A live, in-browser sandbox for Proofrail. Watch an AI agent action pass through policy, human approval, a signed proof, execution, and a signed receipt. Replays are blocked. All cryptography runs in your browser."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Martian+Mono:wght@400;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "@proofrail/core": "./vendor/core/index.js",
+          "@proofrail/mcp-gateway": "./vendor/gateway/index.js",
+          "@proofrail/provider-local": "./vendor/provider/index.js"
+        }
+      }
+    </script>
   </head>
   <body>
-    <header class="site-header">
-      <a class="brand" href="https://github.com/chokonaira/proofrail">Proofrail</a>
-      <nav aria-label="Primary">
-        <a href="#demo">Sandbox</a>
-        <a href="#protocol">Protocol</a>
-        <a href="#channels">Channels</a>
+    <div class="grain" aria-hidden="true"></div>
+
+    <header class="bar">
+      <div class="bar-left">
+        <span class="logo">PROOFRAIL</span>
+        <span class="tag">working name</span>
+      </div>
+      <nav class="bar-right">
+        <span class="dot" id="engineDot"></span>
+        <span class="muted" id="engineState">booting crypto engine</span>
         <a href="https://github.com/chokonaira/proofrail">GitHub</a>
       </nav>
     </header>
 
     <main>
       <section class="hero">
-        <div class="hero-copy">
-          <p class="eyebrow">Hosted sandbox</p>
-          <h1>Signed permits before agents act.</h1>
-          <p class="lead">
-            Proofrail sits between an AI agent and sensitive tools. It blocks risky actions until a
-            purpose-bound proof exists, then writes a signed receipt for the audit trail.
-          </p>
-          <div class="actions">
-            <a class="button primary" href="https://github.com/chokonaira/proofrail">View the repo</a>
-            <a class="button secondary" href="#demo">See the sandbox flow</a>
-          </div>
-        </div>
-        <div class="terminal" aria-label="Proofrail sandbox output">
-          <div class="terminal-bar">
-            <span></span>
-            <span></span>
-            <span></span>
-          </div>
-          <pre><code>agent -> payments.create_transfer
-decision=require_proof
-challenge=challenge_...
-
-user denies risky payment
-receipt=receipt_...
-
-agent -> email.send
-decision=require_proof
-user approves exact action
-execution_ok=true</code></pre>
-        </div>
-      </section>
-
-      <section id="demo" class="section">
-        <div class="section-heading">
-          <p class="eyebrow">Runnable today</p>
-          <h2>A hostable UI for the real TypeScript demo.</h2>
-        </div>
-        <div class="split">
-          <div>
-            <p>
-              The sandbox shows an agent attempting a suspicious payment from an untrusted email,
-              then a legitimate email send. The payment is denied. The email requires approval,
-              receives a signed proof, executes, and produces a signed receipt.
-            </p>
-            <pre class="code"><code>npm install
-npm run check
-npm run demo</code></pre>
-          </div>
-          <ul class="checks" aria-label="Demo guarantees">
-            <li>Proof is bound to subject, audience, purpose, and input hash.</li>
-            <li>Replay against changed tool input is denied by policy.</li>
-            <li>Every allow, block, or denial can produce a signed receipt.</li>
-          </ul>
-        </div>
-      </section>
-
-      <section id="protocol" class="section band">
-        <div class="section-heading">
-          <p class="eyebrow">Language-agnostic core</p>
-          <h2>TypeScript SDK, portable protocol.</h2>
-        </div>
-        <div class="grid">
-          <article>
-            <h3>TypeScript-first</h3>
-            <p>Strict types for policies, actions, proof envelopes, providers, and gateway results.</p>
-          </article>
-          <article>
-            <h3>Signed JSON</h3>
-            <p>Ed25519 envelopes make proofs and receipts verifiable outside the SDK.</p>
-          </article>
-          <article>
-            <h3>Sidecar-ready</h3>
-            <p>Java, Go, Python, and .NET services can call a Proofrail gateway over HTTP.</p>
-          </article>
-        </div>
-      </section>
-
-      <section id="channels" class="section">
-        <div class="section-heading">
-          <p class="eyebrow">Approval roadmap</p>
-          <h2>One permission model, multiple approval channels.</h2>
-        </div>
-        <div class="channels">
-          <span>Local approval</span>
-          <span>Passkey</span>
-          <span>Email magic link</span>
-          <span>Slack or Teams</span>
-          <span>GitHub review</span>
-          <span>Credential wallet</span>
-        </div>
-        <p class="note">
-          V0 includes local approval for demos and internal tools. External channels will be adapters
-          that issue the same proof format, so applications do not need to change policy logic.
+        <p class="eyebrow">// authorization + proof + audit for AI agent actions</p>
+        <h1>Every agent action gets a warrant<span class="caret">_</span></h1>
+        <p class="lede">
+          Agents now send mail, move money, and delete data. Proofrail sits in front of those
+          actions: policy decides, a human or credential approves the exact action, a short-lived
+          signed proof is issued, and a signed receipt lands in the audit log. Run it below. Nothing
+          is faked. Ed25519 runs in this browser.
         </p>
       </section>
+
+      <section class="console" id="console">
+        <div class="panel pick">
+          <h2 class="panel-title">01 — pick what the agent tries</h2>
+          <div class="scenarios" id="scenarios"></div>
+          <div class="action-card">
+            <div class="action-head">
+              <span class="kv"><span class="muted">tool</span><span id="acTool">—</span></span>
+              <span class="risk" id="acRisk">—</span>
+            </div>
+            <p class="purpose" id="acPurpose">Select a scenario to load an action.</p>
+            <pre class="json" id="acInput"><code>{}</code></pre>
+            <button class="run" id="runBtn" disabled>send through the gate →</button>
+          </div>
+        </div>
+
+        <div class="panel rail-panel">
+          <h2 class="panel-title">02 — the rail</h2>
+          <ol class="rail" id="rail">
+            <li class="stage" data-stage="authorize">
+              <span class="node"></span>
+              <div class="stage-body">
+                <span class="stage-name">authorize</span>
+                <span class="stage-note" id="st-authorize">policy evaluates the tool call</span>
+              </div>
+            </li>
+            <li class="stage" data-stage="approve">
+              <span class="node"></span>
+              <div class="stage-body">
+                <span class="stage-name">approve / deny</span>
+                <span class="stage-note" id="st-approve">a human signs off on the exact action</span>
+              </div>
+              <div class="stage-actions" id="approveActions" hidden>
+                <button class="mini approve" id="approveBtn">approve</button>
+                <button class="mini deny" id="denyBtn">deny</button>
+              </div>
+            </li>
+            <li class="stage" data-stage="execute">
+              <span class="node"></span>
+              <div class="stage-body">
+                <span class="stage-name">execute + seal</span>
+                <span class="stage-note" id="st-execute">tool runs, signed receipt is written</span>
+              </div>
+              <div class="stage-actions" id="executeActions" hidden>
+                <button class="mini go" id="executeBtn">execute</button>
+                <button class="mini replay" id="replayBtn" hidden>replay this proof</button>
+              </div>
+            </li>
+          </ol>
+
+          <div class="readout">
+            <div class="verdict" id="verdict" data-state="idle">
+              <span class="verdict-label">decision</span>
+              <span class="verdict-value" id="verdictValue">idle</span>
+            </div>
+            <pre class="json out" id="output"><code>// the signed proof and receipt will appear here</code></pre>
+          </div>
+        </div>
+      </section>
+
+      <section class="audit">
+        <div class="audit-head">
+          <h2 class="panel-title">03 — audit log <span class="muted">(signed, tamper-evident)</span></h2>
+          <span class="count" id="auditCount">0 receipts</span>
+        </div>
+        <div class="audit-list" id="auditList">
+          <p class="empty">No actions yet. Run one above and a signed receipt will appear here.</p>
+        </div>
+      </section>
+
+      <footer class="foot">
+        <span>Apache-2.0</span>
+        <span class="muted">zero runtime dependencies · runs on Node, browser, Deno, Bun, edge</span>
+      </footer>
     </main>
+
+    <script type="module" src="app.js"></script>
   </body>
 </html>

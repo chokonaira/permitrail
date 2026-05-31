@@ -1,7 +1,9 @@
 .DS_Store
+.claude/
 node_modules/
 coverage/
 dist/
+site/vendor/
 *.tsbuildinfo
 .env
 .env.*
