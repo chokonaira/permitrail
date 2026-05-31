@@ -17,6 +17,15 @@ import type {
   SignedEnvelope,
 } from '@proofrail/core';
 
+import { InMemoryReplayGuard } from './replay-guard.ts';
+import type { ReplayGuard } from './replay-guard.ts';
+import type { AuditSink } from './audit.ts';
+
+export { InMemoryReplayGuard } from './replay-guard.ts';
+export { InMemoryAuditLog } from './audit.ts';
+export type { ReplayGuard } from './replay-guard.ts';
+export type { AuditSink } from './audit.ts';
+
 export interface ProofrailGatewayOptions {
   readonly policy?: ProofrailPolicy;
   readonly provider?: ProofProvider;
@@ -25,6 +34,11 @@ export interface ProofrailGatewayOptions {
   // key on every boot produces an audit trail nobody can later verify.
   readonly receiptKeyPair: ProofrailKeyPair;
   readonly trustedProofKeys?: readonly string[];
+  // Enforces single-use proofs. Defaults to an in-process guard; supply a
+  // shared implementation (for example Redis-backed) for multi-instance setups.
+  readonly replayGuard?: ReplayGuard;
+  // Receives every signed receipt for durable audit. Optional.
+  readonly auditSink?: AuditSink;
 }
 
 export interface GatewayAuthorizeOptions {
@@ -79,6 +93,8 @@ export class ProofrailGateway {
   readonly provider?: ProofProvider;
   readonly receiptKeyPair: ProofrailKeyPair;
   readonly trustedProofKeys: readonly string[];
+  readonly replayGuard: ReplayGuard;
+  readonly auditSink?: AuditSink;
 
   constructor(options: ProofrailGatewayOptions) {
     if (!options?.receiptKeyPair?.privateKeyPem) {
@@ -90,6 +106,8 @@ export class ProofrailGateway {
     this.provider = options.provider;
     this.receiptKeyPair = options.receiptKeyPair;
     this.trustedProofKeys = options.trustedProofKeys || [];
+    this.replayGuard = options.replayGuard ?? new InMemoryReplayGuard();
+    this.auditSink = options.auditSink;
   }
 
   async authorize<TInput = unknown>(
@@ -152,42 +170,40 @@ export class ProofrailGateway {
     const authorization = await this.authorize(action, options);
 
     if (!authorization.allowed) {
-      const receipt = await createActionReceipt(
-        {
-          action,
-          decision: authorization.outcome,
-          reason: authorization.reason,
-          policyId: authorization.policyId,
-          proofEnvelope: options.proofEnvelope,
-        },
-        this.receiptKeyPair,
-      );
+      const receipt = await this.#writeReceipt(action, authorization.outcome, authorization.reason, authorization.policyId, options.proofEnvelope);
+      return { ok: false, authorization, receipt };
+    }
 
-      return {
-        ok: false,
-        authorization,
-        receipt,
-      };
+    // Single-use enforcement: a verified proof may drive exactly one execution.
+    // Without this, a still-valid proof could be replayed for the same action
+    // until it expires. The guard consumes the proof id before the tool runs.
+    const proofId = authorization.proof?.id;
+    if (proofId) {
+      const fresh = await this.replayGuard.consume(proofId, authorization.proof?.expiresAt);
+      if (!fresh) {
+        const receipt = await this.#writeReceipt(action, 'denied', 'Proof has already been used (replay blocked)', authorization.policyId, options.proofEnvelope);
+        return { ok: false, authorization, receipt };
+      }
     }
 
     const result = await handler(action.input);
+    const receipt = await this.#writeReceipt(action, 'allowed', authorization.reason, authorization.policyId, options.proofEnvelope);
+    return { ok: true, result, authorization, receipt };
+  }
+
+  async #writeReceipt<TInput>(
+    action: AgentAction<TInput>,
+    decision: string,
+    reason: string | undefined,
+    policyId: string | undefined,
+    proofEnvelope: SignedEnvelope<ProofPayload> | undefined,
+  ): Promise<SignedEnvelope<ActionReceiptPayload>> {
     const receipt = await createActionReceipt(
-      {
-        action,
-        decision: 'allowed',
-        reason: authorization.reason,
-        policyId: authorization.policyId,
-        proofEnvelope: options.proofEnvelope,
-      },
+      { action, decision, reason, policyId, proofEnvelope },
       this.receiptKeyPair,
     );
-
-    return {
-      ok: true,
-      result,
-      authorization,
-      receipt,
-    };
+    await this.auditSink?.record(receipt);
+    return receipt;
   }
 }
 

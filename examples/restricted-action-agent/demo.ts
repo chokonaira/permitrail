@@ -1,15 +1,17 @@
 import { createProofrailKeyPair } from '@proofrail/core';
-import { ProofrailGateway } from '@proofrail/mcp-gateway';
+import { ProofrailGateway, InMemoryAuditLog } from '@proofrail/mcp-gateway';
 import { LocalApprovalProvider } from '@proofrail/provider-local';
 import { policy } from './policy.ts';
 
 const provider = await LocalApprovalProvider.create();
 const receiptKeyPair = await createProofrailKeyPair({ kid: 'proofrail-gateway-demo' });
+const auditLog = new InMemoryAuditLog();
 const gateway = new ProofrailGateway({
   policy,
   provider,
   trustedProofKeys: [provider.publicKeyPem],
   receiptKeyPair,
+  auditSink: auditLog,
 });
 
 const maliciousPayment = {
@@ -41,7 +43,7 @@ const legitimateEmail = {
 
 console.log('\nProofrail demo: proof-gated tool calls\n');
 
-console.log('1. Agent attempts risky payment from untrusted email.');
+console.log('1. Agent attempts a risky payment from an untrusted email.');
 const paymentAuth = await gateway.authorize(maliciousPayment);
 console.log(`   decision=${paymentAuth.outcome}`);
 console.log(`   reason=${paymentAuth.reason}`);
@@ -55,7 +57,7 @@ const denialReceipt = await provider.deny(paymentAuth.challenge.id, {
 });
 console.log(`   denial_receipt=${denialReceipt.payload.id}`);
 
-console.log('\n2. Agent attempts legitimate email send.');
+console.log('\n2. Agent attempts a legitimate email send.');
 const emailAuth = await gateway.authorize(legitimateEmail);
 console.log(`   decision=${emailAuth.outcome}`);
 console.log(`   reason=${emailAuth.reason}`);
@@ -88,4 +90,15 @@ console.log(`   execution_ok=${result.ok}`);
 console.log(`   receipt=${result.receipt.payload.id}`);
 console.log(`   input_hash=${result.receipt.payload.inputHash}`);
 
-console.log('\nTakeaway: the agent could not use risky tools until a purpose-bound proof existed.\n');
+console.log('\n3. Agent replays the same proof for the same action.');
+const replay = await gateway.execute(
+  legitimateEmail,
+  async () => ({ delivered: true, to: 'client@example.com', messageId: 'msg_replay' }),
+  { proofEnvelope: emailProof },
+);
+console.log(`   execution_ok=${replay.ok}`);
+console.log(`   reason=${replay.receipt.payload.reason}`);
+
+console.log(`\nAudit log holds ${auditLog.receipts.length} signed receipts.`);
+console.log('Takeaway: risky tools stay blocked until a purpose-bound proof exists,');
+console.log('and each proof works exactly once.\n');
