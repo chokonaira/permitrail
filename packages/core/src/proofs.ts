@@ -79,6 +79,13 @@ export async function verifyProof(
 
   invariant(new Date(payload.expiresAt).getTime() > now.getTime(), 'PROOF_EXPIRED', 'Proof has expired');
 
+  // Validate the issue time so a future-dated proof cannot sidestep maxAgeSeconds
+  // and a malformed window is rejected.
+  const issuedAtMs = new Date(payload.issuedAt).getTime();
+  invariant(!Number.isNaN(issuedAtMs), 'INVALID_ISSUED_AT', 'Proof issuedAt is not a valid date');
+  invariant(issuedAtMs < new Date(payload.expiresAt).getTime(), 'INVALID_VALIDITY_WINDOW', 'Proof issuedAt must be before expiresAt');
+  invariant(issuedAtMs <= now.getTime() + 60_000, 'PROOF_NOT_YET_VALID', 'Proof issuedAt is in the future');
+
   if (options.audience) {
     invariant(payload.audience === options.audience, 'AUDIENCE_MISMATCH', 'Proof audience does not match');
   }

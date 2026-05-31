@@ -88,6 +88,55 @@ test('policy denies action when proof is replayed with different input', async (
   assert.match(result.reason, /input/);
 });
 
+test('policy denies proof issued for a different tool', async () => {
+  const keys = await createPermitRailKeyPair({ kid: 'policy-key' });
+  const proof = await createProof(
+    {
+      claim: 'human.approved_action',
+      subject: action.subject,
+      audience: action.audience,
+      purpose: action.purpose,
+      provider: 'permitrail-local',
+      action: { ...action, tool: 'crm.update' },
+    },
+    keys,
+  );
+
+  const result = await evaluatePolicy(policy, action, proof, {
+    publicKeyPem: keys.publicKeyPem,
+  });
+
+  assert.equal(result.outcome, 'deny');
+  assert.match(result.reason, /different tool/);
+});
+
+test('policy allows no-input action when proof is bound to that action', async () => {
+  const keys = await createPermitRailKeyPair({ kid: 'policy-key' });
+  const noInputAction = {
+    tool: 'email.send',
+    audience: 'email-agent',
+    subject: 'user_1',
+    purpose: 'Send empty-body notification',
+  } satisfies AgentAction;
+  const proof = await createProof(
+    {
+      claim: 'human.approved_action',
+      subject: noInputAction.subject,
+      audience: noInputAction.audience,
+      purpose: noInputAction.purpose,
+      provider: 'permitrail-local',
+      action: noInputAction,
+    },
+    keys,
+  );
+
+  const result = await evaluatePolicy(policy, noInputAction, proof, {
+    publicKeyPem: keys.publicKeyPem,
+  });
+
+  assert.equal(result.outcome, 'allow');
+});
+
 test('policy matches structured (object) claim values by deep equality', async () => {
   const keys = await createPermitRailKeyPair({ kid: 'policy-key' });
   const objectPolicy = {

@@ -62,7 +62,7 @@ test('tools/list exposes the permitrail tools', async () => {
   const result = (await handler('tools/list', {})) as { tools: { name: string }[] };
   const names = result.tools.map((tool) => tool.name);
   assert.ok(names.includes('permitrail_authorize_tool_call'));
-  assert.ok(names.includes('permitrail_write_receipt'));
+  assert.ok(names.includes('permitrail_verify_proof'));
   assert.ok(names.includes('permitrail_approve_challenge'));
 });
 

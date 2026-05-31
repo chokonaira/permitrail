@@ -77,6 +77,14 @@ export async function evaluatePolicy<TInput = unknown>(
       minAssurance: required.minAssurance || firstAssurance(required.assurance),
     });
 
+    // Bind the proof to this exact tool. verifyProof already bound audience,
+    // subject, and purpose; without this, a proof minted for a different tool
+    // with the same claim, subject, audience, purpose, and input could satisfy
+    // this policy.
+    if (proof.action && proof.action.tool !== action.tool) {
+      return decision('deny', 'Proof was issued for a different tool', policyId);
+    }
+
     const valueOk =
       required.value === undefined || stableStringify(proof.value) === stableStringify(required.value);
     if (!valueOk) {
@@ -97,8 +105,13 @@ export async function evaluatePolicy<TInput = unknown>(
     }
 
     if (required.bindActionInputHash) {
+      // Compare hash-to-hash. A no-input action yields undefined on both sides
+      // and still matches, while the tool/audience/subject/purpose binding above
+      // keeps it bound. A proof carrying a different input no longer slips
+      // through, and an input-bearing action cannot be satisfied by a no-input
+      // proof.
       const expectedHash = action.input === undefined ? undefined : await sha256(action.input);
-      if (!expectedHash || proof.actionInputHash !== expectedHash) {
+      if (proof.actionInputHash !== expectedHash) {
         return decision('deny', 'Proof is not bound to this action input', policyId);
       }
     }

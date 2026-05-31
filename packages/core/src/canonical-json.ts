@@ -20,9 +20,17 @@ export function canonicalize(value: unknown): JsonValue {
   }
 
   if (typeof value === 'object') {
-    const result: JsonObject = {};
+    // Null-prototype result so a stray "__proto__" key can never mutate a
+    // prototype during assignment, and reject the prototype-pollution keys
+    // outright so they cannot ride inside a signed payload.
+    const result = Object.create(null) as JsonObject;
     const input = value as Record<string, unknown>;
     for (const key of Object.keys(input).sort()) {
+      invariant(
+        key !== '__proto__' && key !== 'constructor' && key !== 'prototype',
+        'UNSAFE_KEY',
+        `Canonical JSON rejects the unsafe object key: ${key}`,
+      );
       const child = input[key];
       if (child !== undefined) {
         result[key] = canonicalize(child);

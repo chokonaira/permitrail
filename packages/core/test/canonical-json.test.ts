@@ -10,3 +10,9 @@ test('stableStringify sorts object keys recursively', () => {
   assert.equal(stableStringify(a), stableStringify(b));
   assert.equal(stableStringify(a), '{"a":{"y":2,"z":3},"b":1}');
 });
+
+test('stableStringify rejects prototype-pollution keys', () => {
+  const payload = JSON.parse('{"metadata":{"__proto__":{"admin":true},"safe":true}}');
+
+  assert.throws(() => stableStringify(payload), /unsafe object key/);
+});

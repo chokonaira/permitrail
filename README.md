@@ -115,7 +115,6 @@ persisted key file for production. The server exposes:
 - `permitrail_authorize_tool_call`
 - `permitrail_get_challenge`
 - `permitrail_verify_proof`
-- `permitrail_write_receipt`
 
 See [docs/mcp.md](docs/mcp.md).
 

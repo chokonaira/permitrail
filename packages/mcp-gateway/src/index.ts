@@ -44,6 +44,10 @@ export interface PermitRailGatewayOptions {
 export interface GatewayAuthorizeOptions {
   readonly proofEnvelope?: SignedEnvelope<ProofPayload>;
   readonly now?: Date | number | string;
+  // When true, an allow decision consumes the proof (single-use) before
+  // returning. Use this on an authorize-only path such as MCP, where there is
+  // no later execute() to spend it. execute() always consumes on its own.
+  readonly consume?: boolean;
 }
 
 export type GatewayAuthorization<TInput = unknown> = PolicyDecision<TInput> & {
@@ -80,8 +84,7 @@ export interface PermitRailMcpToolsOptions {
 export type PermitRailMcpToolName =
   | 'permitrail_authorize_tool_call'
   | 'permitrail_get_challenge'
-  | 'permitrail_verify_proof'
-  | 'permitrail_write_receipt';
+  | 'permitrail_verify_proof';
 
 export interface PermitRailMcpToolRouter {
   readonly tools: readonly McpToolDefinition[];
@@ -155,11 +158,22 @@ export class PermitRailGateway {
       };
     }
 
-    return {
-      ...decision,
-      proof: verifiedProof || (decision.outcome === 'allow' ? decision.proof : undefined),
-      verificationError,
-    };
+    const verified = verifiedProof || (decision.outcome === 'allow' ? decision.proof : undefined);
+
+    if (options.consume && decision.outcome === 'allow' && verified) {
+      const fresh = await this.replayGuard.consume(verified.id, verified.expiresAt);
+      if (!fresh) {
+        return {
+          outcome: 'deny',
+          allowed: false,
+          reason: 'Proof has already been used (replay blocked)',
+          policyId: decision.policyId,
+          verificationError,
+        } as GatewayAuthorization<TInput>;
+      }
+    }
+
+    return { ...decision, proof: verified, verificationError };
   }
 
   async execute<TInput = unknown, TResult = unknown>(
@@ -167,7 +181,8 @@ export class PermitRailGateway {
     handler: ToolHandler<TInput, TResult>,
     options: GatewayAuthorizeOptions = {},
   ): Promise<GatewayExecutionResult<TInput, TResult>> {
-    const authorization = await this.authorize(action, options);
+    // execute() owns proof consumption (below), so never let the option double-spend.
+    const authorization = await this.authorize(action, { ...options, consume: false });
 
     if (!authorization.allowed) {
       const receipt = await this.#writeReceipt(action, authorization.outcome, authorization.reason, authorization.policyId, options.proofEnvelope);
@@ -260,36 +275,6 @@ export const MCP_TOOL_DEFINITIONS: readonly McpToolDefinition[] = Object.freeze(
       },
     },
   },
-  {
-    name: 'permitrail_write_receipt',
-    description: 'Create a signed receipt for an allowed, blocked, or denied action.',
-    inputSchema: {
-      type: 'object',
-      required: ['action', 'decision'],
-      additionalProperties: false,
-      properties: {
-        action: {
-          type: 'object',
-          required: ['tool', 'audience', 'subject', 'purpose'],
-          additionalProperties: false,
-          properties: {
-            tool: { type: 'string', description: 'Dotted tool id, for example email.send or payments.create_transfer.' },
-            audience: { type: 'string', description: 'The agent or system that will use the proof.' },
-            subject: { type: 'string', description: 'The user or actor the action is on behalf of.' },
-            purpose: { type: 'string', description: 'Exact, human-readable reason for this action.' },
-            risk: { type: 'string', description: 'Optional risk label, for example low, medium, or high.' },
-            input: { type: 'object', description: 'The exact tool input. Bound by hash when the policy requires it.' },
-            chainId: { type: 'string', description: 'Correlation id shared by every action in one multi-agent workflow.' },
-            parentId: { type: 'string', description: 'Receipt id of the upstream step that led to this action.' },
-          },
-        },
-        decision: { type: 'string' },
-        reason: { type: 'string' },
-        policyId: { type: 'string' },
-        proofEnvelope: { type: 'object' },
-      },
-    },
-  },
 ]);
 
 export function createPermitRailMcpTools(options: PermitRailMcpToolsOptions): PermitRailMcpToolRouter {
@@ -300,7 +285,10 @@ export function createPermitRailMcpTools(options: PermitRailMcpToolsOptions): Pe
         case 'permitrail_authorize_tool_call':
           return options.gateway.authorize(
             input.action as AgentAction,
-            { proofEnvelope: input.proofEnvelope as SignedEnvelope<ProofPayload> | undefined },
+            {
+              proofEnvelope: input.proofEnvelope as SignedEnvelope<ProofPayload> | undefined,
+              consume: true,
+            },
           );
 
         case 'permitrail_get_challenge':
@@ -314,18 +302,6 @@ export function createPermitRailMcpTools(options: PermitRailMcpToolsOptions): Pe
             options.gateway.trustedProofKeys,
             input.proofEnvelope as SignedEnvelope<ProofPayload>,
             typeof input.publicKeyPem === 'string' ? input.publicKeyPem : undefined,
-          );
-
-        case 'permitrail_write_receipt':
-          return createActionReceipt(
-            {
-              action: input.action as AgentAction,
-              decision: String(input.decision),
-              reason: typeof input.reason === 'string' ? input.reason : undefined,
-              policyId: typeof input.policyId === 'string' ? input.policyId : undefined,
-              proofEnvelope: input.proofEnvelope as SignedEnvelope<ProofPayload> | undefined,
-            },
-            options.gateway.receiptKeyPair,
           );
 
         default:

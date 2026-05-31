@@ -84,6 +84,31 @@ test('verifyProof rejects expired proof', async () => {
   );
 });
 
+test('verifyProof rejects a proof issued too far in the future', async () => {
+  const keys = await createPermitRailKeyPair({ kid: 'test-key' });
+  const proof = await createProof(
+    {
+      claim: 'human.approved_action',
+      subject: 'user_1',
+      audience: 'email-agent',
+      purpose: 'Send invoice INV-1',
+      provider: 'permitrail-local',
+      now: new Date('2026-01-01T00:02:00Z'),
+      ttlSeconds: 60,
+    },
+    keys,
+  );
+
+  await assert.rejects(
+    () =>
+      verifyProof(proof, {
+        publicKeyPem: keys.publicKeyPem,
+        now: new Date('2026-01-01T00:00:00Z'),
+      }),
+    /future/,
+  );
+});
+
 test('action receipts include input hashes', async () => {
   const keys = await createPermitRailKeyPair({ kid: 'receipt-key' });
   const receipt = await createActionReceipt(

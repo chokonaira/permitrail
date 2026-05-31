@@ -3,7 +3,7 @@
 `@permitrail/mcp` is a runnable, dependency-free MCP server. It speaks
 newline-delimited JSON-RPC 2.0 over stdio and puts the PermitRail gateway in front
 of agent tool calls, so any MCP client can authorize actions, collect approvals,
-verify proofs, and write signed receipts.
+and verify proofs.
 
 ## Run
 
@@ -35,10 +35,10 @@ The server reads two environment variables:
 ## Tools
 
 - `permitrail_authorize_tool_call(action, proofEnvelope?)` returns a decision:
-  `allow`, `deny`, or `require_proof` with a challenge.
+  `allow`, `deny`, or `require_proof` with a challenge. When a proof allows an
+  action, the MCP path consumes that proof so it cannot be replayed.
 - `permitrail_get_challenge(challengeId)` returns the status of a challenge.
 - `permitrail_verify_proof(proofEnvelope, publicKeyPem?)` verifies a signed proof.
-- `permitrail_write_receipt(action, decision, ...)` returns a signed receipt.
 
 The recommended loop:
 
@@ -46,9 +46,13 @@ The recommended loop:
 agent
   -> permitrail_authorize_tool_call
   -> approval channel if the result is require_proof
-  -> the sensitive tool only after PermitRail allows
-  -> permitrail_write_receipt
+  -> permitrail_authorize_tool_call again with the signed proof
+  -> the sensitive tool only after PermitRail allows and consumes the proof
 ```
+
+Signed receipts are produced by the embedded gateway `execute()` path. The
+runnable MCP server does not expose a public receipt-signing tool because that
+would let an untrusted MCP client mint arbitrary audit receipts.
 
 ## Embedding in an existing server
 

@@ -152,3 +152,22 @@ test('mcp tools authorize calls and expose challenge status', async () => {
   assert.ok(challenge);
   assert.equal((challenge as { status: string }).status, 'pending');
 });
+
+test('mcp authorization consumes a proof so it cannot be replayed over authorize-only flows', async () => {
+  const { provider, gateway } = await buildGateway();
+  const mcp = createPermitRailMcpTools({ gateway, provider });
+
+  const pending = await mcp.callTool('permitrail_authorize_tool_call', { action: deleteAction });
+  const authorization = pending as Awaited<ReturnType<PermitRailGateway['authorize']>>;
+  if (authorization.outcome !== 'require_proof' || !authorization.challenge) {
+    throw new Error('Expected proof challenge');
+  }
+
+  const proofEnvelope = await provider.approve(authorization.challenge.id, { approvedBy: 'admin_1' });
+  const first = await mcp.callTool('permitrail_authorize_tool_call', { action: deleteAction, proofEnvelope });
+  const second = await mcp.callTool('permitrail_authorize_tool_call', { action: deleteAction, proofEnvelope });
+
+  assert.equal((first as { outcome: string }).outcome, 'allow');
+  assert.equal((second as { outcome: string }).outcome, 'deny');
+  assert.match((second as { reason: string }).reason, /replay/i);
+});
