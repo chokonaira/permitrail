@@ -17,7 +17,7 @@ import type {
 
 export interface LocalApprovalProviderOptions {
   readonly provider?: string;
-  readonly keyPair?: PermitRailKeyPair;
+  readonly keyPair: PermitRailKeyPair;
 }
 
 export interface ApproveProofOptions {
@@ -36,10 +36,21 @@ export class LocalApprovalProvider {
   readonly keyPair: PermitRailKeyPair;
   readonly challenges: Map<string, ProofChallenge>;
 
-  constructor(options: LocalApprovalProviderOptions = {}) {
+  constructor(options: LocalApprovalProviderOptions) {
+    if (!options?.keyPair?.privateKeyPem) {
+      throw new Error(
+        'LocalApprovalProvider requires a keyPair. Use "await LocalApprovalProvider.create()" to generate one, or pass your own.',
+      );
+    }
     this.provider = options.provider || 'permitrail-local';
-    this.keyPair = options.keyPair || createPermitRailKeyPair({ kid: `${this.provider}-dev` });
+    this.keyPair = options.keyPair;
     this.challenges = new Map();
+  }
+
+  static async create(options: { readonly provider?: string } = {}): Promise<LocalApprovalProvider> {
+    const provider = options.provider || 'permitrail-local';
+    const keyPair = await createPermitRailKeyPair({ kid: `${provider}-dev` });
+    return new LocalApprovalProvider({ provider, keyPair });
   }
 
   get publicKeyPem() {
@@ -68,7 +79,7 @@ export class LocalApprovalProvider {
     options: ApproveProofOptions = {},
   ): Promise<SignedEnvelope<ProofPayload>> {
     const challenge = this.#getPendingChallenge(challengeId);
-    const proofEnvelope = createProof(
+    const proofEnvelope = await createProof(
       {
         ...challenge.request,
         id: createId('proof'),

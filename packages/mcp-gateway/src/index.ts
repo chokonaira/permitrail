@@ -2,7 +2,6 @@ import {
   DEFAULT_POLICY,
   buildProofRequestFromPolicy,
   createActionReceipt,
-  createPermitRailKeyPair,
   evaluatePolicy,
   verifyProof,
 } from '@permitrail/core';
@@ -18,11 +17,28 @@ import type {
   SignedEnvelope,
 } from '@permitrail/core';
 
+import { InMemoryReplayGuard } from './replay-guard.ts';
+import type { ReplayGuard } from './replay-guard.ts';
+import type { AuditSink } from './audit.ts';
+
+export { InMemoryReplayGuard } from './replay-guard.ts';
+export { InMemoryAuditLog } from './audit.ts';
+export type { ReplayGuard } from './replay-guard.ts';
+export type { AuditSink } from './audit.ts';
+
 export interface PermitRailGatewayOptions {
   readonly policy?: PermitRailPolicy;
   readonly provider?: ProofProvider;
-  readonly receiptKeyPair?: PermitRailKeyPair;
+  // Required. Generate once with createPermitRailKeyPair() and persist it so
+  // receipts stay verifiable across restarts. A gateway that mints a throwaway
+  // key on every boot produces an audit trail nobody can later verify.
+  readonly receiptKeyPair: PermitRailKeyPair;
   readonly trustedProofKeys?: readonly string[];
+  // Enforces single-use proofs. Defaults to an in-process guard; supply a
+  // shared implementation (for example Redis-backed) for multi-instance setups.
+  readonly replayGuard?: ReplayGuard;
+  // Receives every signed receipt for durable audit. Optional.
+  readonly auditSink?: AuditSink;
 }
 
 export interface GatewayAuthorizeOptions {
@@ -77,12 +93,21 @@ export class PermitRailGateway {
   readonly provider?: ProofProvider;
   readonly receiptKeyPair: PermitRailKeyPair;
   readonly trustedProofKeys: readonly string[];
+  readonly replayGuard: ReplayGuard;
+  readonly auditSink?: AuditSink;
 
-  constructor(options: PermitRailGatewayOptions = {}) {
+  constructor(options: PermitRailGatewayOptions) {
+    if (!options?.receiptKeyPair?.privateKeyPem) {
+      throw new Error(
+        'PermitRailGateway requires a receiptKeyPair. Generate one with createPermitRailKeyPair() and persist it so receipts stay verifiable across restarts.',
+      );
+    }
     this.policy = options.policy;
     this.provider = options.provider;
-    this.receiptKeyPair = options.receiptKeyPair || createPermitRailKeyPair({ kid: 'permitrail-gateway-dev' });
+    this.receiptKeyPair = options.receiptKeyPair;
     this.trustedProofKeys = options.trustedProofKeys || [];
+    this.replayGuard = options.replayGuard ?? new InMemoryReplayGuard();
+    this.auditSink = options.auditSink;
   }
 
   async authorize<TInput = unknown>(
@@ -96,7 +121,7 @@ export class PermitRailGateway {
     if (options.proofEnvelope) {
       for (const publicKeyPem of this.trustedProofKeys) {
         try {
-          verifiedProof = verifyProof(options.proofEnvelope, {
+          verifiedProof = await verifyProof(options.proofEnvelope, {
             publicKeyPem,
             audience: action.audience,
             subject: action.subject,
@@ -113,7 +138,7 @@ export class PermitRailGateway {
     }
 
     const activePolicy = this.policy || DEFAULT_POLICY;
-    const decision = evaluatePolicy(activePolicy, action, options.proofEnvelope, {
+    const decision = await evaluatePolicy(activePolicy, action, options.proofEnvelope, {
       publicKeyPem: matchedPublicKeyPem,
       audience: action.audience,
       subject: action.subject,
@@ -145,42 +170,40 @@ export class PermitRailGateway {
     const authorization = await this.authorize(action, options);
 
     if (!authorization.allowed) {
-      const receipt = createActionReceipt(
-        {
-          action,
-          decision: authorization.outcome,
-          reason: authorization.reason,
-          policyId: authorization.policyId,
-          proofEnvelope: options.proofEnvelope,
-        },
-        this.receiptKeyPair,
-      );
+      const receipt = await this.#writeReceipt(action, authorization.outcome, authorization.reason, authorization.policyId, options.proofEnvelope);
+      return { ok: false, authorization, receipt };
+    }
 
-      return {
-        ok: false,
-        authorization,
-        receipt,
-      };
+    // Single-use enforcement: a verified proof may drive exactly one execution.
+    // Without this, a still-valid proof could be replayed for the same action
+    // until it expires. The guard consumes the proof id before the tool runs.
+    const proofId = authorization.proof?.id;
+    if (proofId) {
+      const fresh = await this.replayGuard.consume(proofId, authorization.proof?.expiresAt);
+      if (!fresh) {
+        const receipt = await this.#writeReceipt(action, 'denied', 'Proof has already been used (replay blocked)', authorization.policyId, options.proofEnvelope);
+        return { ok: false, authorization, receipt };
+      }
     }
 
     const result = await handler(action.input);
-    const receipt = createActionReceipt(
-      {
-        action,
-        decision: 'allowed',
-        reason: authorization.reason,
-        policyId: authorization.policyId,
-        proofEnvelope: options.proofEnvelope,
-      },
+    const receipt = await this.#writeReceipt(action, 'allowed', authorization.reason, authorization.policyId, options.proofEnvelope);
+    return { ok: true, result, authorization, receipt };
+  }
+
+  async #writeReceipt<TInput>(
+    action: AgentAction<TInput>,
+    decision: string,
+    reason: string | undefined,
+    policyId: string | undefined,
+    proofEnvelope: SignedEnvelope<ProofPayload> | undefined,
+  ): Promise<SignedEnvelope<ActionReceiptPayload>> {
+    const receipt = await createActionReceipt(
+      { action, decision, reason, policyId, proofEnvelope },
       this.receiptKeyPair,
     );
-
-    return {
-      ok: true,
-      result,
-      authorization,
-      receipt,
-    };
+    await this.auditSink?.record(receipt);
+    return receipt;
   }
 }
 
@@ -193,7 +216,21 @@ export const MCP_TOOL_DEFINITIONS: readonly McpToolDefinition[] = Object.freeze(
       required: ['action'],
       additionalProperties: false,
       properties: {
-        action: { type: 'object' },
+        action: {
+          type: 'object',
+          required: ['tool', 'audience', 'subject', 'purpose'],
+          additionalProperties: false,
+          properties: {
+            tool: { type: 'string', description: 'Dotted tool id, for example email.send or payments.create_transfer.' },
+            audience: { type: 'string', description: 'The agent or system that will use the proof.' },
+            subject: { type: 'string', description: 'The user or actor the action is on behalf of.' },
+            purpose: { type: 'string', description: 'Exact, human-readable reason for this action.' },
+            risk: { type: 'string', description: 'Optional risk label, for example low, medium, or high.' },
+            input: { type: 'object', description: 'The exact tool input. Bound by hash when the policy requires it.' },
+            chainId: { type: 'string', description: 'Correlation id shared by every action in one multi-agent workflow.' },
+            parentId: { type: 'string', description: 'Receipt id of the upstream step that led to this action.' },
+          },
+        },
         proofEnvelope: { type: 'object' },
       },
     },
@@ -231,7 +268,21 @@ export const MCP_TOOL_DEFINITIONS: readonly McpToolDefinition[] = Object.freeze(
       required: ['action', 'decision'],
       additionalProperties: false,
       properties: {
-        action: { type: 'object' },
+        action: {
+          type: 'object',
+          required: ['tool', 'audience', 'subject', 'purpose'],
+          additionalProperties: false,
+          properties: {
+            tool: { type: 'string', description: 'Dotted tool id, for example email.send or payments.create_transfer.' },
+            audience: { type: 'string', description: 'The agent or system that will use the proof.' },
+            subject: { type: 'string', description: 'The user or actor the action is on behalf of.' },
+            purpose: { type: 'string', description: 'Exact, human-readable reason for this action.' },
+            risk: { type: 'string', description: 'Optional risk label, for example low, medium, or high.' },
+            input: { type: 'object', description: 'The exact tool input. Bound by hash when the policy requires it.' },
+            chainId: { type: 'string', description: 'Correlation id shared by every action in one multi-agent workflow.' },
+            parentId: { type: 'string', description: 'Receipt id of the upstream step that led to this action.' },
+          },
+        },
         decision: { type: 'string' },
         reason: { type: 'string' },
         policyId: { type: 'string' },
@@ -284,18 +335,18 @@ export function createPermitRailMcpTools(options: PermitRailMcpToolsOptions): Pe
   };
 }
 
-function verifyWithTrustedKeys(
+async function verifyWithTrustedKeys(
   trustedProofKeys: readonly string[],
   proofEnvelope: SignedEnvelope<ProofPayload>,
   explicitPublicKeyPem?: string,
-): { readonly ok: true; readonly proof: ProofPayload } | { readonly ok: false; readonly error: string } {
+): Promise<{ readonly ok: true; readonly proof: ProofPayload } | { readonly ok: false; readonly error: string }> {
   const keys = explicitPublicKeyPem ? [explicitPublicKeyPem] : trustedProofKeys;
 
   for (const publicKeyPem of keys) {
     try {
       return {
         ok: true,
-        proof: verifyProof(proofEnvelope, { publicKeyPem }),
+        proof: await verifyProof(proofEnvelope, { publicKeyPem }),
       };
     } catch {
       continue;

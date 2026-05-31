@@ -20,7 +20,9 @@
     "paths": {
       "@permitrail/core": ["packages/core/src/index.ts"],
       "@permitrail/provider-local": ["packages/local-provider/src/index.ts"],
-      "@permitrail/mcp-gateway": ["packages/mcp-gateway/src/index.ts"]
+      "@permitrail/mcp-gateway": ["packages/mcp-gateway/src/index.ts"],
+      "@permitrail/mcp": ["packages/mcp/src/index.ts"],
+      "@permitrail/provider-webhook": ["packages/webhook-provider/src/index.ts"]
     }
   }
 }

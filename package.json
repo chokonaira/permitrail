@@ -24,7 +24,9 @@
     "audit-trail"
   ],
   "scripts": {
-    "build": "tsc -b tsconfig.build.json --emitDeclarationOnly",
+    "build": "tsc -b tsconfig.build.json",
+    "clean": "rm -rf packages/*/dist packages/*/*.tsbuildinfo site/vendor",
+    "build:sandbox": "npm run build && rm -rf site/vendor && mkdir -p site/vendor/core site/vendor/gateway site/vendor/provider && cp packages/core/dist/*.js site/vendor/core/ && cp packages/mcp-gateway/dist/*.js site/vendor/gateway/ && cp packages/local-provider/dist/*.js site/vendor/provider/",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --conditions=development --experimental-strip-types --test \"packages/**/*.test.ts\" \"examples/**/*.test.ts\"",
     "demo": "node --conditions=development --experimental-strip-types examples/restricted-action-agent/demo.ts",
@@ -32,7 +34,7 @@
     "prepack": "npm run build"
   },
   "engines": {
-    "node": ">=24.0.0"
+    "node": ">=22.6.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

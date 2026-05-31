@@ -1,79 +1,52 @@
 # PermitRail
 
 [![CI](https://github.com/chokonaira/permitrail/actions/workflows/test.yml/badge.svg)](https://github.com/chokonaira/permitrail/actions/workflows/test.yml)
-[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
-[![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6.svg)](tsconfig.json)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![dependencies](https://img.shields.io/badge/runtime%20dependencies-0-2ea043.svg)](package.json)
 
-**Proof-gated tool calls for AI agents.**
+**Authorization, proof, and audit for what AI agents actually do.**
 
-PermitRail is an open-source permission layer for agents that use tools. It
-sits between the agent and sensitive actions, requires a short-lived
-purpose-bound proof when policy says approval is needed, then writes a signed
-receipt for the audit trail.
+Agents now send mail, move money, open pull requests, and delete data. The hard
+question is no longer "can the model call the tool." It is "was this exact action
+allowed, by whom, for what, and can you prove it afterward."
 
-[Hosted sandbox](https://chokonaira.github.io/permitrail/) ·
-[Integration guide](docs/integration.md) ·
-[Protocol schema](spec/permitrail.schema.json)
+PermitRail sits in front of those actions. Policy decides, an approver signs off on
+the exact action, a short-lived signed proof is issued, the tool runs once, and a
+signed receipt lands in your audit log.
 
 ```txt
-Agent -> PermitRail -> email.send / payments.create_transfer / github.merge_pr / database.delete_rows
+agent ──▶ authorize ──▶ approve ──▶ execute ──▶ seal
+            policy        proof       tool       signed receipt
 ```
 
-## Why
+[Live sandbox](https://chokonaira.github.io/permitrail/) · [Policy model](docs/policy.md) · [MCP server](docs/mcp.md) · [Threat model](docs/threat-model.md) · [Protocol schema](spec/permitrail.schema.json)
 
-Agents are starting to send messages, change data, open pull requests, and move
-money. The hard question is no longer only "can the model call the tool?" It is:
+## What it gives you
 
-- was this exact action approved?
-- was the approval bound to the same subject, audience, purpose, and input?
-- can a proof be replayed against a different recipient, amount, branch, or row?
-- can the team audit what happened after the agent acted?
+- Per-tool policy: allow, deny, or require approval.
+- Proofs bound to the exact subject, audience, purpose, and input hash. A proof
+  for one recipient or amount does not work for another.
+- Single-use proofs. A still-valid proof cannot be replayed against the same
+  action before it expires.
+- A signed, verifiable receipt for every action, allowed or denied.
+- Pluggable approval providers. The same policy works whether approval comes from
+  a passkey, an email link, Slack, or a webhook.
+- Multi-agent chains: correlate a sequence of agent handoffs into one signed,
+  tamper-evident trail.
+- Zero runtime dependencies. The same code runs on Node, browsers, Deno, Bun, and
+  edge runtimes (Ed25519 and SHA-256 over the Web Crypto API).
 
-PermitRail gives developers a small, inspectable control point for those
-questions.
-
-## What It Provides
-
-- TypeScript-first SDK with strict public types
-- policy-gated tool-call authorization
-- purpose-bound proof requests
-- Ed25519 signed proof envelopes
-- action input hashing to block replay
-- signed action receipts
-- local approval provider for demos and internal tools
-- MCP-ready tool definitions and router
-- language-agnostic JSON protocol for other stacks
-
-## Run It
-
-Requirements:
-
-- Node 24+
-- npm
+## Install
 
 ```bash
-git clone https://github.com/chokonaira/permitrail.git
-cd permitrail
-npm install
-npm run check
+npm install @permitrail/core @permitrail/mcp-gateway @permitrail/provider-local
 ```
-
-The demo flow blocks a suspicious payment, records the denial, requests approval
-for a legitimate email, verifies the proof, runs the tool, and writes a signed
-receipt.
-
-```bash
-npm run demo
-```
-
-## Use In TypeScript
 
 ```ts
+import { createPermitRailKeyPair } from '@permitrail/core';
 import type { AgentAction, PermitRailPolicy } from '@permitrail/core';
 import { LocalApprovalProvider } from '@permitrail/provider-local';
 import { PermitRailGateway } from '@permitrail/mcp-gateway';
-
-const provider = new LocalApprovalProvider();
 
 const policy = {
   version: 'permitrail.policy.v1',
@@ -81,7 +54,6 @@ const policy = {
   defaults: { unconfiguredTool: 'deny' },
   tools: {
     'email.send': {
-      id: 'email-send-human-approval',
       require: {
         claim: 'human.approved_action',
         value: true,
@@ -93,10 +65,13 @@ const policy = {
   },
 } satisfies PermitRailPolicy;
 
+const provider = await LocalApprovalProvider.create();
 const gateway = new PermitRailGateway({
   policy,
   provider,
   trustedProofKeys: [provider.publicKeyPem],
+  // Generate once and persist it. Receipts stay verifiable across restarts.
+  receiptKeyPair: await createPermitRailKeyPair(),
 });
 
 const action = {
@@ -104,86 +79,122 @@ const action = {
   audience: 'sales-agent',
   subject: 'user_123',
   purpose: 'Send invoice INV-123 to client@example.com',
-  input: {
-    to: 'client@example.com',
-    subject: 'Invoice INV-123',
-  },
+  input: { to: 'client@example.com', subject: 'Invoice INV-123' },
 } satisfies AgentAction;
 
 const decision = await gateway.authorize(action);
 
-if (decision.outcome === 'require_proof') {
-  if (!decision.challenge) {
-    throw new Error('PermitRail did not return an approval challenge');
-  }
-
+if (decision.outcome === 'require_proof' && decision.challenge) {
+  // In production a real provider channel approves out of band.
   const proof = await provider.approve(decision.challenge.id);
   const result = await gateway.execute(action, sendEmail, { proofEnvelope: proof });
-  console.log(result.receipt.payload.id);
+  console.log(result.ok, result.receipt.payload.id);
 }
 ```
 
-## Plug Into MCP
+## Run it as an MCP server
 
-PermitRail exposes MCP-ready tool definitions without forcing a specific MCP
-server package. Register the tools with your server, then route tool calls
-through PermitRail before the agent reaches sensitive adapters.
+PermitRail ships a runnable, dependency-free MCP server. Point any MCP client at it
+and route sensitive tool calls through PermitRail first.
 
-```ts
-import { createPermitRailMcpTools } from '@permitrail/mcp-gateway';
+```bash
+npx @permitrail/mcp
+```
 
-const permitrail = createPermitRailMcpTools({ gateway, provider });
-
-for (const tool of permitrail.tools) {
-  server.registerTool(tool.name, {
-    description: tool.description,
-    inputSchema: tool.inputSchema,
-  }, async (input) => permitrail.callTool(tool.name, input));
+```json
+{
+  "mcpServers": {
+    "permitrail": { "command": "npx", "args": ["-y", "@permitrail/mcp"] }
+  }
 }
 ```
 
-Core MCP tools:
+Set `PERMITRAIL_POLICY` to a policy JSON file and `PERMITRAIL_RECEIPT_KEY` to a
+persisted key file for production. The server exposes:
 
 - `permitrail_authorize_tool_call`
 - `permitrail_get_challenge`
 - `permitrail_verify_proof`
 - `permitrail_write_receipt`
 
-## Approval Providers
+See [docs/mcp.md](docs/mcp.md).
 
-Proofs come from providers. The first provider is local approval, which is
-useful for demos, tests, and internal workflows. Future providers can wrap:
+## Try it locally
 
-- passkeys
-- email magic links
+Requires Node 22.6 or newer (it runs TypeScript directly for development).
+
+```bash
+git clone https://github.com/chokonaira/permitrail.git
+cd permitrail
+npm install
+npm run check   # typecheck, tests, and the demo
+npm run demo    # block a payment, approve an email, then watch a replay get refused
+```
+
+The sandbox is a static page. Build it and serve `site/` with any static server:
+
+```bash
+npm run build:sandbox
+npx http-server site
+```
+
+## How a proof stays safe
+
+| Attack | What stops it |
+| --- | --- |
+| Prompt injection telling the agent to act | Risky tools need a proof; the approver sees the exact purpose and input |
+| Replaying an approval for a different amount or recipient | The proof is bound to a hash of the exact input |
+| Reusing a valid proof a second time | Proofs are single-use; the gateway consumes them before the tool runs |
+| One agent using another agent's proof | The proof is bound to an `audience`; verification rejects the wrong holder |
+| Tampering with the audit trail | Receipts are Ed25519 signed and verify independently |
+
+Details and scope are in [docs/threat-model.md](docs/threat-model.md).
+
+## Multi-agent chains
+
+Set `chainId` on each action and `parentId` to the upstream step's receipt id.
+Every step is authorized independently and its receipt carries the chain context,
+so the whole handoff sequence reconstructs into one signed, tamper-evident trail.
+Because each proof is bound to its `audience`, one agent cannot wield another
+agent's approval.
+
+## Approval providers
+
+A provider answers an approval request and signs a proof. Two are included: the
+local provider (in-process, for demos and internal tools) and the webhook
+provider (routes each approval to any HTTP endpoint and signs on approval). The
+same policy and proof format also work for:
+
+- passkeys and WebAuthn
+- email one-time codes or magic links
 - Slack or Teams approvals
 - GitHub review approvals
-- OAuth account control
-- credential wallets
-- identity verification providers
+- OAuth account control (Google, Microsoft, Okta)
+- identity verification (for example Persona or Stripe Identity)
+- any custom HTTP webhook
 
-Applications do not need to change policy logic when providers change. Every
-provider issues the same proof envelope.
+Swapping providers never changes your policy logic.
 
-## Other Stacks
+## Other languages
 
-PermitRail starts with a TypeScript SDK, but the protocol is portable:
+The protocol is portable. Policies, proofs, and receipts are JSON; signatures are
+Ed25519; input binding is canonical JSON plus SHA-256. Any stack can verify a
+proof or receipt from [spec/permitrail.schema.json](spec/permitrail.schema.json).
 
-- policies are JSON
-- proofs are signed JSON envelopes
-- receipts are signed JSON envelopes
-- tool input binding uses canonical JSON plus SHA-256
+## Packages
 
-Java, Go, Python, Ruby, Rust, and .NET services can integrate through an HTTP
-sidecar or implement the protocol directly from the schema.
+| Package | What it is |
+| --- | --- |
+| `@permitrail/core` | Protocol primitives: policy, proofs, receipts, Web Crypto signing |
+| `@permitrail/mcp-gateway` | The enforcement gateway, replay guard, audit sink, MCP tool definitions |
+| `@permitrail/provider-local` | Local approval provider for demos and internal tools |
+| `@permitrail/provider-webhook` | Webhook approval provider: route approvals to any HTTP endpoint |
+| `@permitrail/mcp` | Runnable stdio MCP server |
 
-See [docs/integration.md](docs/integration.md) for the integration paths.
+## Contributing
 
-## Project Status
-
-Pre-1.0 alpha. The proof format, policy model, and MCP surface are intentionally
-small so they can be reviewed, tested, and extended without hiding behavior
-behind a large framework.
+Issues and pull requests are welcome. Run `npm run check` before opening a PR. See
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

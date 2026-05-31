@@ -1,16 +1,19 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { createPermitRailKeyPair } from '@permitrail/core';
 import { PermitRailGateway } from '@permitrail/mcp-gateway';
 import { LocalApprovalProvider } from '@permitrail/provider-local';
 import { policy } from './policy.ts';
 
 test('restricted action demo blocks first and allows after proof', async () => {
-  const provider = new LocalApprovalProvider();
+  const provider = await LocalApprovalProvider.create();
+  const receiptKeyPair = await createPermitRailKeyPair({ kid: 'demo-receipts' });
   const gateway = new PermitRailGateway({
     policy,
     provider,
     trustedProofKeys: [provider.publicKeyPem],
+    receiptKeyPair,
   });
 
   const action = {

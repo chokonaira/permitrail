@@ -55,7 +55,7 @@ same.
 | `human_approved` | Human approved the exact action |
 | `provider_verified` | External provider verified the claim |
 | `credential_verified` | Cryptographic credential verified the claim |
-| `qualified_trust` | High-assurance regulated trust framework |
+| `high_assurance` | Certified or regulated high-assurance verification |
 
 ## Purpose Binding
 

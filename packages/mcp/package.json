@@ -1,14 +1,17 @@
 {
-  "name": "@permitrail/mcp-gateway",
+  "name": "@permitrail/mcp",
   "version": "0.1.0",
   "type": "module",
-  "description": "Permission and audit gateway for PermitRail, with MCP-ready tool definitions.",
+  "description": "Zero-dependency MCP server that gates AI agent tool calls through PermitRail.",
   "license": "Apache-2.0",
   "author": "Henry Okonkwo",
   "repository": {
     "type": "git",
     "url": "https://github.com/chokonaira/permitrail.git",
-    "directory": "packages/mcp-gateway"
+    "directory": "packages/mcp"
+  },
+  "bin": {
+    "permitrail-mcp": "./dist/bin.js"
   },
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -21,14 +24,15 @@
       "default": "./dist/index.js"
     }
   },
-  "sideEffects": false,
   "files": [
     "dist",
     "README.md",
     "LICENSE"
   ],
   "dependencies": {
-    "@permitrail/core": "0.1.0"
+    "@permitrail/core": "0.1.0",
+    "@permitrail/mcp-gateway": "0.1.0",
+    "@permitrail/provider-local": "0.1.0"
   },
   "engines": {
     "node": ">=20.0.0"

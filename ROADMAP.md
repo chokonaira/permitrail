@@ -1,41 +1,27 @@
 # Roadmap
 
-## v0.1 - Proof-Gated Tool Calls
+## Shipped
 
-- Signed proof envelopes
-- Purpose-bound action receipts
-- Policy evaluator
+- Signed proof envelopes and purpose-bound action receipts
+- Policy evaluator with default deny and per-tool rules
+- Single-use proofs (replay guard) and a pluggable audit sink
+- Isomorphic Web Crypto core (Node, browsers, Deno, Bun, edge), zero dependencies
+- Multi-agent chain correlation (chainId and parentId on signed receipts)
 - Local approval provider
-- MCP-facing gateway primitives
-- Restricted-action demo
-- Threat model and proof-format docs
+- Runnable stdio MCP server (`@permitrail/mcp`)
+- Installable packages with ESM and type declarations
+- Live in-browser sandbox
 
-## v0.2 - Provider Adapters
+## Next
 
-- GitHub org membership provider
-- Email OTP provider
-- Passkey/WebAuthn provider
-- OAuth account-control provider
-
-## v0.3 - MCP Server
-
-- Full stdio MCP server
-- Tool proxy mode
-- Policy file loading
-- Human approval link flow
-- JSON audit log sink
-
-## v0.4 - Production Readiness
-
-- Key rotation helpers
-- Receipt export
-- OpenTelemetry hooks
-- Policy test runner
-- Prompt-injection demo suite
+- Provider adapters: passkey and WebAuthn, email one-time code, OAuth, Slack, GitHub review, custom webhook
+- Key rotation helpers and receipt export
+- OpenTelemetry audit sink
+- Policy test runner and a prompt-injection demo suite
 
 ## Later
 
-- Stripe Identity adapter
-- OpenID4VP adapter
-- EUDI wallet adapter
-- WalletGate provider adapter
+- Identity verification adapters (for example Persona or Stripe Identity)
+- Verifiable credential provider adapters
+- HTTP sidecar for non-JavaScript stacks
+- Hosted approval service
