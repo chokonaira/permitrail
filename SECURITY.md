@@ -6,8 +6,7 @@ systems.
 
 ## Supported Versions
 
-The project is pre-1.0. Until a stable release exists, security fixes target the
-main branch.
+Security fixes target the main branch and the most recently published packages.
 
 ## Reporting Vulnerabilities
 
