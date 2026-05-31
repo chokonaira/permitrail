@@ -1,0 +1,39 @@
+{
+  "name": "@permitrail/provider-webhook",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Webhook approval provider for PermitRail: route approvals to any HTTP endpoint.",
+  "license": "Apache-2.0",
+  "author": "Henry Okonkwo",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/chokonaira/permitrail.git",
+    "directory": "packages/webhook-provider"
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "development": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "@permitrail/core": "0.1.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

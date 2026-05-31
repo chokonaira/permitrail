@@ -160,8 +160,10 @@ agent's approval.
 
 ## Approval providers
 
-A provider answers an approval request and signs a proof. The local provider is
-included for demos and internal tools. The same policy and proof format work for:
+A provider answers an approval request and signs a proof. Two are included: the
+local provider (in-process, for demos and internal tools) and the webhook
+provider (routes each approval to any HTTP endpoint and signs on approval). The
+same policy and proof format also work for:
 
 - passkeys and WebAuthn
 - email one-time codes or magic links
@@ -186,6 +188,7 @@ proof or receipt from [spec/permitrail.schema.json](spec/permitrail.schema.json)
 | `@permitrail/core` | Protocol primitives: policy, proofs, receipts, Web Crypto signing |
 | `@permitrail/mcp-gateway` | The enforcement gateway, replay guard, audit sink, MCP tool definitions |
 | `@permitrail/provider-local` | Local approval provider for demos and internal tools |
+| `@permitrail/provider-webhook` | Webhook approval provider: route approvals to any HTTP endpoint |
 | `@permitrail/mcp` | Runnable stdio MCP server |
 
 ## Contributing

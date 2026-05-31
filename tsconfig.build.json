@@ -4,6 +4,7 @@
     { "path": "./packages/core" },
     { "path": "./packages/local-provider" },
     { "path": "./packages/mcp-gateway" },
-    { "path": "./packages/mcp" }
+    { "path": "./packages/mcp" },
+    { "path": "./packages/webhook-provider" }
   ]
 }
