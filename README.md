@@ -186,13 +186,18 @@ proof or receipt from [spec/permitrail.schema.json](spec/permitrail.schema.json)
 
 ## Packages
 
-| Package | What it is |
+PermitRail is split by trust boundary so teams can install only the surface they
+need. Most app integrations start with `@permitrail/core`,
+`@permitrail/mcp-gateway`, and one approval provider. MCP users can start with
+the runnable server.
+
+| Package | Use it when you need |
 | --- | --- |
-| `@permitrail/core` | Protocol primitives: policy, proofs, receipts, Web Crypto signing |
-| `@permitrail/mcp-gateway` | The enforcement gateway, replay guard, audit sink, MCP tool definitions |
-| `@permitrail/provider-local` | Local approval provider for demos and internal tools |
-| `@permitrail/provider-webhook` | Webhook approval provider: route approvals to any HTTP endpoint |
-| `@permitrail/mcp` | Runnable stdio MCP server |
+| [`@permitrail/core`](https://www.npmjs.com/package/@permitrail/core) | Protocol primitives: canonical JSON, policy checks, proofs, receipts, and Web Crypto signing |
+| [`@permitrail/mcp-gateway`](https://www.npmjs.com/package/@permitrail/mcp-gateway) | An embeddable enforcement gateway with replay protection, audit receipts, and MCP-ready tool definitions |
+| [`@permitrail/provider-local`](https://www.npmjs.com/package/@permitrail/provider-local) | An in-process approval provider for demos, tests, and internal tools |
+| [`@permitrail/provider-webhook`](https://www.npmjs.com/package/@permitrail/provider-webhook) | A production approval bridge to your own HTTPS endpoint, Slack bot, risk engine, or approval service |
+| [`@permitrail/mcp`](https://www.npmjs.com/package/@permitrail/mcp) | A runnable stdio MCP server for clients that should authorize tool calls through PermitRail |
 
 ## Contributing
 
