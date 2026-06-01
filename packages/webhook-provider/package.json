@@ -7,7 +7,7 @@
   "author": "Henry Okonkwo",
   "repository": {
     "type": "git",
-    "url": "https://github.com/chokonaira/permitrail.git",
+    "url": "git+https://github.com/chokonaira/permitrail.git",
     "directory": "packages/webhook-provider"
   },
   "main": "./dist/index.js",

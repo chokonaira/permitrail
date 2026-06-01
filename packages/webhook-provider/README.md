@@ -24,6 +24,11 @@ const provider = await WebhookApprovalProvider.create({
 });
 ```
 
+`APPROVAL_TOKEN` is your own secret for authenticating to your approval endpoint.
+It is not issued by PermitRail, and it is not an npm token. If your endpoint uses
+HMAC signatures, mTLS, a queue, or a private network instead of bearer auth,
+inject a custom transport.
+
 The default transport requires HTTPS, except for localhost development. You can
 inject a custom transport to add request signing, queues, private networking, or
 tests without a network call.

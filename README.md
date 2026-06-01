@@ -23,7 +23,7 @@ flowchart LR
     E --> S[("seal<br/>signed receipt")]
 ```
 
-[Live sandbox](https://chokonaira.github.io/permitrail/) · [API reference](https://chokonaira.github.io/permitrail/api/) · [Policy model](docs/policy.md) · [MCP server](docs/mcp.md) · [Threat model](docs/threat-model.md) · [Protocol schema](spec/permitrail.schema.json)
+[Live sandbox](https://chokonaira.github.io/permitrail/) · [API reference](https://chokonaira.github.io/permitrail/api/) · [Production guide](docs/production.md) · [Policy model](docs/policy.md) · [MCP server](docs/mcp.md) · [Threat model](docs/threat-model.md) · [Protocol schema](spec/permitrail.schema.json)
 
 ## What it gives you
 
@@ -41,6 +41,18 @@ flowchart LR
   edge runtimes (Ed25519 and SHA-256 over the Web Crypto API).
 
 ## Install
+
+PermitRail does not ship AI models. It ships small TypeScript packages for
+different integration points, so you install only the pieces you need.
+
+| If you want to | Install |
+| --- | --- |
+| Embed PermitRail in an app or agent gateway | `npm install @permitrail/core @permitrail/mcp-gateway @permitrail/provider-webhook` |
+| Build a local demo or internal prototype | `npm install @permitrail/core @permitrail/mcp-gateway @permitrail/provider-local` |
+| Add PermitRail to an MCP client | `npx @permitrail/mcp` |
+| Verify proofs or receipts in another service | `npm install @permitrail/core` |
+
+For a quick in-process demo:
 
 ```bash
 npm install @permitrail/core @permitrail/mcp-gateway @permitrail/provider-local
@@ -198,6 +210,25 @@ the runnable server.
 | [`@permitrail/provider-local`](https://www.npmjs.com/package/@permitrail/provider-local) | An in-process approval provider for demos, tests, and internal tools |
 | [`@permitrail/provider-webhook`](https://www.npmjs.com/package/@permitrail/provider-webhook) | A production approval bridge to your own HTTPS endpoint, Slack bot, risk engine, or approval service |
 | [`@permitrail/mcp`](https://www.npmjs.com/package/@permitrail/mcp) | A runnable stdio MCP server for clients that should authorize tool calls through PermitRail |
+
+## Production posture
+
+The cryptographic and policy path is designed for production use: signed Ed25519
+proofs and receipts, default-deny policy, purpose/audience/subject binding,
+optional input-hash binding, replay protection, and tests for tampering,
+expiry, wrong-tool use, wrong-input use, MCP replay, and webhook denial paths.
+
+Production deployments still need normal operator wiring:
+
+- persist receipt keys and provider signing keys
+- configure explicit trusted provider public keys
+- use a durable `AuditSink`
+- use a shared `ReplayGuard` such as Redis for multi-instance gateways
+- use a real approval provider/channel, not the local demo provider
+- keep application authorization and downstream tool validation in place
+
+See [docs/production.md](docs/production.md) for the deployment checklist and
+current limits.
 
 ## Contributing
 
