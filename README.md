@@ -23,7 +23,7 @@ flowchart LR
     E --> S[("seal<br/>signed receipt")]
 ```
 
-[Live sandbox](https://chokonaira.github.io/permitrail/) · [Policy model](docs/policy.md) · [MCP server](docs/mcp.md) · [Threat model](docs/threat-model.md) · [Protocol schema](spec/permitrail.schema.json)
+[Live sandbox](https://chokonaira.github.io/permitrail/) · [API reference](https://chokonaira.github.io/permitrail/api/) · [Policy model](docs/policy.md) · [MCP server](docs/mcp.md) · [Threat model](docs/threat-model.md) · [Protocol schema](spec/permitrail.schema.json)
 
 ## What it gives you
 

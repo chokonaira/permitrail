@@ -1,0 +1,21 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": [
+    "packages/core/src/index.ts",
+    "packages/mcp-gateway/src/index.ts",
+    "packages/local-provider/src/index.ts",
+    "packages/webhook-provider/src/index.ts",
+    "packages/mcp/src/index.ts"
+  ],
+  "tsconfig": "tsconfig.json",
+  "out": "site/api",
+  "name": "PermitRail API reference",
+  "readme": "none",
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "hideGenerator": true,
+  "navigationLinks": {
+    "GitHub": "https://github.com/chokonaira/permitrail",
+    "Sandbox": "https://chokonaira.github.io/permitrail/"
+  }
+}

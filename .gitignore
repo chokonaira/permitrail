@@ -4,6 +4,7 @@ node_modules/
 coverage/
 dist/
 site/vendor/
+site/api/
 *.tsbuildinfo
 .env
 .env.*
