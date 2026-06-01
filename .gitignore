@@ -14,4 +14,12 @@ site/api/
 *.pem
 *.key
 *.crt
+
+# local image assets (source art + generated social/OG previews)
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.gif
+
 agent-id-wedge-strategy.pdf

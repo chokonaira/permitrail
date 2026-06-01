@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>PermitRail Sandbox - approve, deny, and audit AI agent actions</title>
+    <title>PermitRail - proof-gated actions for AI agents</title>
     <meta
       name="description"
-      content="A live browser sandbox for PermitRail. Pick a realistic AI agent action, run a policy check, approve or deny it, execute once, and see the signed audit receipt."
+      content="A live PermitRail sandbox. Run realistic AI agent actions through policy, signed approval proofs, single-use execution, and tamper-evident receipts."
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -36,35 +36,66 @@
       <nav class="bar-right">
         <span class="dot" id="engineDot"></span>
         <span class="muted" id="engineState">starting</span>
-        <a href="https://github.com/chokonaira/permitrail/blob/main/docs/mcp.md">Docs</a>
+        <a href="https://www.npmjs.com/org/permitrail">npm</a>
+        <a href="https://github.com/chokonaira/permitrail/blob/main/docs/production.md">Production</a>
         <a href="https://github.com/chokonaira/permitrail">GitHub</a>
       </nav>
     </header>
 
     <main>
       <section class="hero">
-        <p class="eyebrow">A working demo. Nothing here is faked.</p>
-        <h1>Run an agent action through PermitRail</h1>
-        <p class="lede">
-          PermitRail decides whether an AI agent's action is allowed, asks a person to approve the
-          exact request, and signs a receipt anyone can verify. Pick one below and watch it happen.
-          The tools are simulated, so nothing is really sent or charged.
-        </p>
-        <div class="hero-actions">
-          <a class="primary-link" href="#console">Run the sandbox</a>
-          <a class="secondary-link" href="https://github.com/chokonaira/permitrail/blob/main/docs/threat-model.md">Read threat model</a>
+        <div class="hero-copy">
+          <p class="eyebrow">Live browser sandbox · real proofs, simulated side effects</p>
+          <h1>Proof-gated actions for AI agents</h1>
+          <p class="lede">
+            PermitRail sits between an agent and a risky tool call. It checks policy, asks for
+            approval of the exact request, signs a short-lived proof, lets the action run once,
+            and writes a receipt you can verify later.
+          </p>
+          <div class="hero-actions">
+            <a class="primary-link" href="#console">Run the sandbox</a>
+            <a class="secondary-link" href="https://github.com/chokonaira/permitrail/blob/main/docs/threat-model.md">Read threat model</a>
+          </div>
+          <div class="proof-strip" aria-label="PermitRail guarantees shown in this sandbox">
+            <span>Ed25519 proofs</span>
+            <span>input-bound approval</span>
+            <span>single-use execution</span>
+            <span>signed receipts</span>
+          </div>
         </div>
-        <div class="proof-strip" aria-label="PermitRail guarantees shown in this sandbox">
-          <span>Ed25519 proofs</span>
-          <span>input-bound approval</span>
-          <span>single-use execution</span>
-          <span>signed receipts</span>
+        <aside class="truth-card" aria-label="What is real in this sandbox">
+          <h2>What runs here</h2>
+          <div class="truth-row">
+            <span class="truth-dot real"></span>
+            <div>
+              <strong>Real PermitRail flow</strong>
+              <p>Policy evaluation, proof signing, replay blocking, and receipt signing run in your browser.</p>
+            </div>
+          </div>
+          <div class="truth-row">
+            <span class="truth-dot simulated"></span>
+            <div>
+              <strong>Simulated downstream tools</strong>
+              <p>Email, payment, and database calls return sandbox results. Nothing is sent, charged, or deleted.</p>
+            </div>
+          </div>
+        </aside>
+      </section>
+
+      <section class="install-strip" aria-label="How to start using PermitRail">
+        <div>
+          <span class="install-label">App integration</span>
+          <code>npm install @permitrail/core @permitrail/mcp-gateway @permitrail/provider-webhook</code>
+        </div>
+        <div>
+          <span class="install-label">MCP</span>
+          <code>npx @permitrail/mcp</code>
         </div>
       </section>
 
       <section class="console" id="console">
         <div class="panel pick">
-          <h2 class="panel-title">Step 1 · pick an action</h2>
+          <h2 class="panel-title">Step 1 · choose a realistic agent action</h2>
           <div class="scenarios" id="scenarios"></div>
           <div class="action-card">
             <div class="action-head">
@@ -74,32 +105,32 @@
             <p class="label">what the approver sees</p>
             <p class="summary" id="acSummary">Select a scenario to load a permission request.</p>
             <div class="recommendation">
-              <span>recommended decision</span>
+              <span>operator hint</span>
               <strong id="acRecommendation">—</strong>
             </div>
             <p class="purpose" id="acPurpose">Select a scenario to load an action.</p>
-            <button class="run" id="runBtn" disabled>Check this action</button>
+            <button class="run" id="runBtn" disabled>Check policy</button>
             <details class="input-details" id="inputDetails" open>
-              <summary>Exact tool input</summary>
+              <summary>Exact input PermitRail binds to the proof</summary>
               <pre class="json" id="acInput"><code>{}</code></pre>
             </details>
           </div>
         </div>
 
         <div class="panel rail-panel">
-          <h2 class="panel-title">Step 2 · what PermitRail does with it</h2>
+          <h2 class="panel-title">Step 2 · policy, proof, execution</h2>
           <ol class="rail" id="rail">
             <li class="stage" data-stage="authorize">
               <span class="node"></span>
               <div class="stage-body">
-                <span class="stage-name">policy check</span>
+              <span class="stage-name">authorize</span>
                 <span class="stage-note" id="st-authorize">policy evaluates the tool call</span>
               </div>
             </li>
             <li class="stage" data-stage="approve">
               <span class="node"></span>
               <div class="stage-body">
-                <span class="stage-name">approval decision</span>
+              <span class="stage-name">approve or deny</span>
                 <span class="stage-note" id="st-approve">a human signs off on the exact action</span>
               </div>
               <div class="stage-actions" id="approveActions" hidden>
@@ -110,7 +141,7 @@
             <li class="stage" data-stage="execute">
               <span class="node"></span>
               <div class="stage-body">
-                <span class="stage-name">execute once</span>
+              <span class="stage-name">execute once</span>
                 <span class="stage-note" id="st-execute">tool runs, signed receipt is written</span>
               </div>
               <div class="stage-actions" id="executeActions" hidden>
@@ -122,7 +153,7 @@
 
           <div class="readout">
             <div class="readout-head">
-              <span>result</span>
+              <span>signed output</span>
               <span id="readoutHint">run the check to begin</span>
             </div>
             <div class="verdict" id="verdict" data-state="idle">
@@ -136,11 +167,11 @@
 
       <section class="audit">
         <div class="audit-head">
-          <h2 class="panel-title">Step 3 · signed audit trail <span class="muted">(tamper-evident)</span></h2>
+          <h2 class="panel-title">Step 3 · receipts <span class="muted">(signed, tamper-evident)</span></h2>
           <span class="count" id="auditCount">0 receipts</span>
         </div>
         <div class="audit-list" id="auditList">
-          <p class="empty">No actions yet. Run one above and a signed receipt will appear here.</p>
+          <p class="empty">No actions yet. Run one above and PermitRail will write a signed receipt.</p>
         </div>
       </section>
 
