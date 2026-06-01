@@ -1,6 +1,7 @@
 # PermitRail
 
 [![CI](https://github.com/chokonaira/permitrail/actions/workflows/test.yml/badge.svg)](https://github.com/chokonaira/permitrail/actions/workflows/test.yml)
+[![npm](https://img.shields.io/npm/v/@permitrail/core.svg?color=cb3837&label=%40permitrail%2Fcore)](https://www.npmjs.com/package/@permitrail/core)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![dependencies](https://img.shields.io/badge/runtime%20dependencies-0-2ea043.svg)](package.json)
 
@@ -23,7 +24,7 @@ flowchart LR
     E --> S[("seal<br/>signed receipt")]
 ```
 
-[Live sandbox](https://chokonaira.github.io/permitrail/) · [API reference](https://chokonaira.github.io/permitrail/api/) · [Production guide](docs/production.md) · [Policy model](docs/policy.md) · [MCP server](docs/mcp.md) · [Threat model](docs/threat-model.md) · [Protocol schema](spec/permitrail.schema.json)
+[Live sandbox](https://chokonaira.github.io/permitrail/) · [API reference](https://chokonaira.github.io/permitrail/api/) · [npm packages](https://www.npmjs.com/org/permitrail) · [Production guide](docs/production.md) · [Policy model](docs/policy.md) · [MCP server](docs/mcp.md) · [Threat model](docs/threat-model.md) · [Protocol schema](spec/permitrail.schema.json)
 
 ## Choose your package
 
