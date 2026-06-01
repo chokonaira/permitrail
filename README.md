@@ -41,6 +41,18 @@ different integration points, so you install only the pieces you need.
 Most app integrations use `@permitrail/core`, `@permitrail/mcp-gateway`, and one
 approval provider. MCP users can start with the runnable server.
 
+## Package reference
+
+Every package and its npm page, so you can see the full surface up front.
+
+| Package | Use it when you need |
+| --- | --- |
+| [`@permitrail/core`](https://www.npmjs.com/package/@permitrail/core) | Protocol primitives: canonical JSON, policy checks, proofs, receipts, and Web Crypto signing |
+| [`@permitrail/mcp-gateway`](https://www.npmjs.com/package/@permitrail/mcp-gateway) | An embeddable enforcement gateway with replay protection, audit receipts, and MCP-ready tool definitions |
+| [`@permitrail/provider-local`](https://www.npmjs.com/package/@permitrail/provider-local) | An in-process approval provider for demos, tests, and internal tools |
+| [`@permitrail/provider-webhook`](https://www.npmjs.com/package/@permitrail/provider-webhook) | A production approval bridge to your own HTTPS endpoint, Slack bot, risk engine, or approval service |
+| [`@permitrail/mcp`](https://www.npmjs.com/package/@permitrail/mcp) | A runnable stdio MCP server for clients that should authorize tool calls through PermitRail |
+
 ## What it gives you
 
 - Per-tool policy: allow, deny, or require approval.
@@ -201,20 +213,6 @@ Swapping providers never changes your policy logic.
 The protocol is portable. Policies, proofs, and receipts are JSON; signatures are
 Ed25519; input binding is canonical JSON plus SHA-256. Any stack can verify a
 proof or receipt from [spec/permitrail.schema.json](spec/permitrail.schema.json).
-
-## Package reference
-
-PermitRail is split by trust boundary so teams can install only the surface they
-need. Use this table when you want the npm package pages and the role of each
-module.
-
-| Package | Use it when you need |
-| --- | --- |
-| [`@permitrail/core`](https://www.npmjs.com/package/@permitrail/core) | Protocol primitives: canonical JSON, policy checks, proofs, receipts, and Web Crypto signing |
-| [`@permitrail/mcp-gateway`](https://www.npmjs.com/package/@permitrail/mcp-gateway) | An embeddable enforcement gateway with replay protection, audit receipts, and MCP-ready tool definitions |
-| [`@permitrail/provider-local`](https://www.npmjs.com/package/@permitrail/provider-local) | An in-process approval provider for demos, tests, and internal tools |
-| [`@permitrail/provider-webhook`](https://www.npmjs.com/package/@permitrail/provider-webhook) | A production approval bridge to your own HTTPS endpoint, Slack bot, risk engine, or approval service |
-| [`@permitrail/mcp`](https://www.npmjs.com/package/@permitrail/mcp) | A runnable stdio MCP server for clients that should authorize tool calls through PermitRail |
 
 ## Production posture
 
