@@ -1,5 +1,6 @@
 .DS_Store
 .claude/
+blog/
 node_modules/
 coverage/
 dist/
