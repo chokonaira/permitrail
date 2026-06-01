@@ -93,27 +93,53 @@
         </div>
       </section>
 
+      <details class="mcp-config">
+        <summary>Connect your own agent · MCP client config</summary>
+        <pre class="json"><code>{
+  "mcpServers": {
+    "permitrail": { "command": "npx", "args": ["-y", "@permitrail/mcp"] }
+  }
+}</code></pre>
+      </details>
+
       <section class="console" id="console">
         <div class="panel pick">
-          <h2 class="panel-title">Step 1 · choose a realistic agent action</h2>
+          <h2 class="panel-title">Step 1 · pick or edit an agent tool call</h2>
           <div class="scenarios" id="scenarios"></div>
           <div class="action-card">
             <div class="action-head">
-              <span class="kv"><span class="muted">tool</span><span id="acTool">—</span></span>
-              <span class="risk" id="acRisk">—</span>
+              <span class="kv"><span class="muted">tool</span><span id="acTool">-</span></span>
+              <span class="action-head-right">
+                <span class="risk" id="acRisk">-</span>
+                <button class="ghost" id="editToggle" type="button">edit</button>
+              </span>
             </div>
-            <p class="label">what the approver sees</p>
-            <p class="summary" id="acSummary">Select a scenario to load a permission request.</p>
-            <div class="recommendation">
-              <span>operator hint</span>
-              <strong id="acRecommendation">—</strong>
+
+            <div class="editor" id="editor" hidden>
+              <p class="label">edit the tool call, then check it against the policy</p>
+              <textarea id="actionEditor" spellcheck="false" rows="13" aria-label="Edit the agent action as JSON"></textarea>
+              <p class="editor-error" id="editorError" hidden></p>
+              <div class="editor-actions">
+                <button class="mini go" id="applyEdit" type="button">Use this action</button>
+                <button class="mini" id="cancelEdit" type="button">Cancel</button>
+              </div>
             </div>
-            <p class="purpose" id="acPurpose">Select a scenario to load an action.</p>
+
+            <div id="actionView">
+              <p class="label">what the approver sees</p>
+              <p class="summary" id="acSummary">Select a scenario to load a permission request.</p>
+              <div class="recommendation">
+                <span>operator hint</span>
+                <strong id="acRecommendation">-</strong>
+              </div>
+              <p class="purpose" id="acPurpose">Select a scenario to load an action.</p>
+              <details class="input-details" id="inputDetails" open>
+                <summary>Exact input PermitRail binds to the proof</summary>
+                <pre class="json" id="acInput"><code>{}</code></pre>
+              </details>
+            </div>
+
             <button class="run" id="runBtn" disabled>Check policy</button>
-            <details class="input-details" id="inputDetails" open>
-              <summary>Exact input PermitRail binds to the proof</summary>
-              <pre class="json" id="acInput"><code>{}</code></pre>
-            </details>
           </div>
         </div>
 
@@ -154,13 +180,25 @@
           <div class="readout">
             <div class="readout-head">
               <span>signed output</span>
-              <span id="readoutHint">run the check to begin</span>
+              <span class="readout-meta"><span class="mcp-chip" id="mcpChip" hidden></span><span id="readoutHint">run the check to begin</span></span>
             </div>
             <div class="verdict" id="verdict" data-state="idle">
               <span class="verdict-label">decision</span>
               <span class="verdict-value" id="verdictValue">idle</span>
             </div>
             <pre class="json out" id="output"><code>The signed proof and receipt will show here.</code></pre>
+
+            <div class="verify" id="verifyBox" hidden>
+              <div class="verify-head">
+                <span>verify the signature yourself</span>
+                <span class="mcp-chip">permitrail_verify_proof</span>
+              </div>
+              <div class="verify-actions">
+                <button class="mini" id="verifyBtn" type="button">Verify proof</button>
+                <button class="mini" id="tamperBtn" type="button" data-on="false">Tamper with it</button>
+              </div>
+              <pre class="json" id="verifyOut"><code>Check the proof against the trusted key. Tamper with it and watch verification fail.</code></pre>
+            </div>
           </div>
         </div>
       </section>

@@ -1,8 +1,9 @@
 import { createPermitRailKeyPair } from '@permitrail/core';
-import { PermitRailGateway, InMemoryAuditLog } from '@permitrail/mcp-gateway';
+import { PermitRailGateway, InMemoryAuditLog, createPermitRailMcpTools } from '@permitrail/mcp-gateway';
 import { LocalApprovalProvider } from '@permitrail/provider-local';
 
 const $ = (id) => document.getElementById(id);
+const clone = (value) => JSON.parse(JSON.stringify(value));
 
 const policy = {
   version: 'permitrail.policy.v1',
@@ -44,9 +45,16 @@ const policy = {
   },
 };
 
+const ICONS = {
+  email: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>',
+  payment: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="12" x="2" y="6" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/></svg>',
+  delete: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></svg>',
+  custom: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+};
+
 const scenarios = {
   email: {
-    glyph: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>',
+    glyph: ICONS.email,
     title: 'Approve a customer invoice email',
     sub: 'Medium risk · external message',
     summary: 'The sales agent wants to email invoice INV-123 to an existing customer.',
@@ -65,7 +73,7 @@ const scenarios = {
     },
   },
   payment: {
-    glyph: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="12" x="2" y="6" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/></svg>',
+    glyph: ICONS.payment,
     title: 'Reject a suspicious payment request',
     sub: 'High risk · money movement',
     summary: 'An untrusted email tells the finance agent to send 5,000 USD to a new account.',
@@ -84,7 +92,7 @@ const scenarios = {
     },
   },
   delete: {
-    glyph: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></svg>',
+    glyph: ICONS.delete,
     title: 'Approve a production cleanup',
     sub: 'High risk · database mutation',
     summary: 'An ops agent wants to delete expired rows after an admin reviewed the exact filter.',
@@ -102,6 +110,24 @@ const scenarios = {
       input: { table: 'events', where: { expired: true } },
     },
   },
+  custom: {
+    glyph: ICONS.custom,
+    title: 'Write your own tool call',
+    sub: 'Test any action against the policy',
+    summary: 'Edit the JSON and run it. Tools that are not in the policy are denied by default.',
+    recommendation: 'your call',
+    recommendedDecision: 'approve',
+    approveLabel: 'Approve and sign proof',
+    denyLabel: 'Deny and seal receipt',
+    action: {
+      tool: 'payments.create_transfer',
+      audience: 'my-agent',
+      subject: 'user_123',
+      purpose: 'Describe exactly what this action does',
+      risk: 'high',
+      input: { amount: 250, currency: 'USD', recipient: 'acct_demo' },
+    },
+  },
 };
 
 const toolResults = {
@@ -112,9 +138,13 @@ const toolResults = {
 
 let gateway;
 let provider;
+let mcp;
 let current = null;
 let challenge = null;
 let proof = null;
+let tamperedProof = null;
+let tampered = false;
+let editedAction = null;
 
 async function init() {
   provider = await LocalApprovalProvider.create();
@@ -126,10 +156,15 @@ async function init() {
     receiptKeyPair,
     auditSink: new InMemoryAuditLog(),
   });
+  mcp = createPermitRailMcpTools({ gateway, provider });
 
   $('engineDot').classList.add('ready');
   $('engineState').textContent = 'signing engine ready';
   renderScenarios();
+}
+
+function activeAction() {
+  return editedAction ?? scenarios[current].action;
 }
 
 function renderScenarios() {
@@ -141,6 +176,7 @@ function renderScenarios() {
     btn.type = 'button';
     btn.className = 'scn';
     btn.setAttribute('aria-selected', 'false');
+    btn.dataset.key = key;
     btn.innerHTML =
       `<span class="glyph">${scn.glyph}</span>` +
       `<span class="scn-copy"><span class="scn-title">${scn.title}</span><span class="scn-sub">${scn.sub}</span></span>` +
@@ -156,27 +192,41 @@ function selectScenario(key, btn) {
   current = key;
   challenge = null;
   proof = null;
+  tampered = false;
+  editedAction = key === 'custom' ? clone(scenarios.custom.action) : null;
+
   for (const el of document.querySelectorAll('.scn')) el.setAttribute('aria-selected', 'false');
   btn.setAttribute('aria-selected', 'true');
 
-  const scenario = scenarios[key];
-  const { action } = scenario;
-  $('acTool').textContent = action.tool;
-  const risk = $('acRisk');
-  risk.textContent = action.risk;
-  risk.dataset.risk = action.risk;
-  $('acSummary').textContent = scenario.summary;
-  $('acRecommendation').textContent = scenario.recommendation;
-  $('acPurpose').textContent = action.purpose;
-  showJson($('acInput'), action.input);
-  $('inputDetails').open = !isSmallScreen();
-  $('approveBtn').textContent = scenario.approveLabel;
-  $('denyBtn').textContent = scenario.denyLabel;
-  $('approveBtn').dataset.recommended = scenario.recommendedDecision === 'approve' ? 'true' : 'false';
-  $('denyBtn').dataset.recommended = scenario.recommendedDecision === 'deny' ? 'true' : 'false';
+  renderActionCard();
+  resetState();
 
+  if (key === 'custom') openEditor();
+  else closeEditor();
+}
+
+function renderActionCard() {
+  const scn = scenarios[current];
+  const action = activeAction();
+  $('acTool').textContent = action.tool || '-';
+  const risk = $('acRisk');
+  risk.textContent = action.risk || 'n/a';
+  risk.dataset.risk = action.risk || '';
+  $('acSummary').textContent = scn.summary;
+  $('acRecommendation').textContent = scn.recommendation;
+  $('acPurpose').textContent = action.purpose || '';
+  showJson($('acInput'), action.input ?? {});
+  $('inputDetails').open = !isSmallScreen();
+  $('approveBtn').textContent = scn.approveLabel;
+  $('denyBtn').textContent = scn.denyLabel;
+  $('approveBtn').dataset.recommended = scn.recommendedDecision === 'approve' ? 'true' : 'false';
+  $('denyBtn').dataset.recommended = scn.recommendedDecision === 'deny' ? 'true' : 'false';
+}
+
+function resetState() {
   resetRail();
   setVerdict('idle', 'ready');
+  setMcp(null);
   note('readoutHint', 'run the check to begin');
   showJson($('output'), 'Run the check to see whether this action needs approval.', true);
   const run = $('runBtn');
@@ -184,17 +234,80 @@ function selectScenario(key, btn) {
   run.textContent = 'Check this action';
   hide('approveActions');
   hide('executeActions');
+  hide('verifyBox');
   $('executeBtn').removeAttribute('hidden');
   hide('replayBtn');
 }
 
+/* ---- editor ---- */
+
+function openEditor() {
+  $('actionEditor').value = JSON.stringify(activeAction(), null, 2);
+  hide('editorError');
+  hide('actionView');
+  show('editor');
+  $('editToggle').textContent = 'close';
+}
+
+function closeEditor() {
+  hide('editor');
+  show('actionView');
+  $('editToggle').textContent = 'edit';
+}
+
+function toggleEditor() {
+  if ($('editor').hasAttribute('hidden')) openEditor();
+  else closeEditor();
+}
+
+function applyEdit() {
+  let parsed;
+  try {
+    parsed = JSON.parse($('actionEditor').value);
+  } catch (error) {
+    showEditorError(`Invalid JSON: ${error.message}`);
+    return;
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    showEditorError('The action must be a JSON object.');
+    return;
+  }
+  if (!parsed.tool || !parsed.audience || !parsed.subject || !parsed.purpose) {
+    showEditorError('Include at least tool, audience, subject, and purpose.');
+    return;
+  }
+  editedAction = parsed;
+  renderActionCard();
+  closeEditor();
+  resetState();
+}
+
+function showEditorError(message) {
+  const el = $('editorError');
+  el.textContent = message;
+  el.removeAttribute('hidden');
+}
+
+/* ---- flow ---- */
+
 async function run() {
   if (!current) return;
-  const { action } = scenarios[current];
+  const action = activeAction();
   $('runBtn').disabled = true;
   setStage('authorize', 'active');
+  setMcp('permitrail_authorize_tool_call');
 
-  const decision = await gateway.authorize(action);
+  let decision;
+  try {
+    decision = await mcp.callTool('permitrail_authorize_tool_call', { action });
+  } catch (error) {
+    setStage('authorize', 'blocked');
+    setVerdict('deny', 'error');
+    showJson($('output'), { error: String(error.message || error) });
+    $('runBtn').disabled = false;
+    return;
+  }
+
   setVerdict(decision.outcome, decision.outcome.replace('_', ' '));
 
   if (decision.outcome === 'require_proof' && decision.challenge) {
@@ -204,12 +317,12 @@ async function run() {
     note('st-authorize', 'policy says this action needs approval');
     note('readoutHint', 'approve or reject it below');
     showJson($('output'), {
+      tool: 'permitrail_authorize_tool_call',
       decision: decision.outcome,
       reason: decision.reason,
       policyId: decision.policyId,
       challenge: challenge.id,
       requires: challenge.request.claim,
-      next: scenarios[current].recommendation,
     });
     show('approveActions');
     focusStep('approve');
@@ -217,11 +330,14 @@ async function run() {
     setStage('authorize', 'done');
     setStage('approve', 'done');
     setStage('execute', 'active');
+    note('st-authorize', 'policy allows this tool with no approval');
+    showJson($('output'), { tool: 'permitrail_authorize_tool_call', decision: decision.outcome, reason: decision.reason });
     show('executeActions');
     focusStep('execute');
   } else {
     setStage('authorize', 'blocked');
-    showJson($('output'), { decision: decision.outcome, reason: decision.reason });
+    note('st-authorize', 'policy denied this tool call');
+    showJson($('output'), { tool: 'permitrail_authorize_tool_call', decision: decision.outcome, reason: decision.reason });
     focusOutput();
   }
 }
@@ -229,13 +345,15 @@ async function run() {
 async function approve() {
   if (!challenge) return;
   proof = await provider.approve(challenge.id, { approvedBy: 'you@sandbox' });
+  tampered = false;
   setStage('approve', 'done');
   setStage('execute', 'active');
   note('st-approve', 'approved, a signed proof was issued for this exact request');
-  note('readoutHint', 'now run it once');
+  note('readoutHint', 'run it once, or verify the proof');
   hide('approveActions');
   showJson($('output'), proofView(proof));
   show('executeActions');
+  showVerifyBox();
   focusStep('execute');
 }
 
@@ -254,8 +372,10 @@ async function deny() {
 
 async function execute() {
   if (!current || !proof) return;
-  const { action } = scenarios[current];
-  const result = await gateway.execute(action, () => toolResults[action.tool], { proofEnvelope: proof });
+  const action = activeAction();
+  const result = await gateway.execute(action, () => toolResults[action.tool] ?? { simulated: true, ran: true }, {
+    proofEnvelope: proof,
+  });
 
   if (result.ok) {
     setStage('execute', 'done');
@@ -272,8 +392,10 @@ async function execute() {
 
 async function replay() {
   if (!current || !proof) return;
-  const { action } = scenarios[current];
-  const result = await gateway.execute(action, () => toolResults[action.tool], { proofEnvelope: proof });
+  const action = activeAction();
+  const result = await gateway.execute(action, () => toolResults[action.tool] ?? { simulated: true, ran: true }, {
+    proofEnvelope: proof,
+  });
 
   setStage('execute', 'blocked');
   setVerdict('blocked', 'replay blocked');
@@ -283,6 +405,50 @@ async function replay() {
   addReceipt(result.receipt);
   $('replayBtn').setAttribute('hidden', '');
   focusOutput();
+}
+
+/* ---- verify + tamper (real permitrail_verify_proof) ---- */
+
+function showVerifyBox() {
+  tampered = false;
+  $('tamperBtn').textContent = 'Tamper with it';
+  $('tamperBtn').dataset.on = 'false';
+  showJson($('verifyOut'), 'Check the proof against the trusted key. Tamper with it and watch verification fail.', true);
+  show('verifyBox');
+}
+
+async function verifyProof() {
+  if (!proof) return;
+  const envelope = tampered ? tamperedProof : proof;
+  const result = await mcp.callTool('permitrail_verify_proof', { proofEnvelope: envelope });
+  if (result.ok) {
+    showJson($('verifyOut'), {
+      tool: 'permitrail_verify_proof',
+      ok: true,
+      verified: true,
+      subject: result.proof.subject,
+      claim: result.proof.claim,
+      actionInputHash: trunc(result.proof.actionInputHash, 30),
+    });
+  } else {
+    showJson($('verifyOut'), { tool: 'permitrail_verify_proof', ok: false, error: result.error });
+  }
+}
+
+function toggleTamper() {
+  if (!proof) return;
+  tampered = !tampered;
+  if (tampered) {
+    tamperedProof = clone(proof);
+    const sig = tamperedProof.signature || '';
+    tamperedProof.signature = (sig[0] === 'A' ? 'B' : 'A') + sig.slice(1);
+    $('tamperBtn').textContent = 'Restore proof';
+    showJson($('verifyOut'), 'One byte of the signature flipped. Verify again and it fails.', true);
+  } else {
+    $('tamperBtn').textContent = 'Tamper with it';
+    showJson($('verifyOut'), 'Proof restored. Verify again and it passes.', true);
+  }
+  $('tamperBtn').dataset.on = String(tampered);
 }
 
 /* ---- view helpers ---- */
@@ -361,6 +527,17 @@ function setVerdict(state, text) {
   $('verdictValue').textContent = text;
 }
 
+function setMcp(toolName) {
+  const chip = $('mcpChip');
+  if (!chip) return;
+  if (toolName) {
+    chip.textContent = `mcp · ${toolName}`;
+    chip.removeAttribute('hidden');
+  } else {
+    chip.setAttribute('hidden', '');
+  }
+}
+
 function show(id) {
   $(id).removeAttribute('hidden');
 }
@@ -374,10 +551,7 @@ function isSmallScreen() {
 
 function focusStep(stage) {
   if (!isSmallScreen()) return;
-  document.querySelector(`.stage[data-stage="${stage}"]`)?.scrollIntoView({
-    behavior: 'smooth',
-    block: 'center',
-  });
+  document.querySelector(`.stage[data-stage="${stage}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 function focusOutput() {
@@ -406,6 +580,11 @@ $('approveBtn').addEventListener('click', approve);
 $('denyBtn').addEventListener('click', deny);
 $('executeBtn').addEventListener('click', execute);
 $('replayBtn').addEventListener('click', replay);
+$('editToggle').addEventListener('click', toggleEditor);
+$('applyEdit').addEventListener('click', applyEdit);
+$('cancelEdit').addEventListener('click', closeEditor);
+$('verifyBtn').addEventListener('click', verifyProof);
+$('tamperBtn').addEventListener('click', toggleTamper);
 
 init().catch((error) => {
   $('engineState').textContent = `engine error: ${error.message}`;
