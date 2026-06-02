@@ -35,6 +35,7 @@ different integration points, so you install only the pieces you need.
 | --- | --- | --- |
 | An app or agent gateway | `npm install @permitrail/core @permitrail/mcp-gateway @permitrail/provider-webhook` | Production path for policy, approval, replay protection, and signed receipts |
 | A local demo or internal prototype | `npm install @permitrail/core @permitrail/mcp-gateway @permitrail/provider-local` | Fastest way to see the proof flow without wiring an external approval service |
+| A local human approval flow | `npm install @permitrail/core @permitrail/mcp-gateway @permitrail/local-approval` | Pause risky tool calls for a human to approve from a local page, with signed proofs |
 | An MCP client setup | `npx @permitrail/mcp` | Run PermitRail as a stdio MCP server in Claude Desktop, Cursor, or another MCP client |
 | A verifier service | `npm install @permitrail/core` | Verify proofs and receipts without running a gateway |
 
@@ -50,6 +51,7 @@ Every package and its npm page, so you can see the full surface up front.
 | [`@permitrail/core`](https://www.npmjs.com/package/@permitrail/core) | Protocol primitives: canonical JSON, policy checks, proofs, receipts, and Web Crypto signing |
 | [`@permitrail/mcp-gateway`](https://www.npmjs.com/package/@permitrail/mcp-gateway) | An embeddable enforcement gateway with replay protection, audit receipts, and MCP-ready tool definitions |
 | [`@permitrail/provider-local`](https://www.npmjs.com/package/@permitrail/provider-local) | An in-process approval provider for demos, tests, and internal tools |
+| [`@permitrail/local-approval`](https://www.npmjs.com/package/@permitrail/local-approval) | A localhost approval server and page for human-in-the-loop approval of agent tool calls (demos and internal tools) |
 | [`@permitrail/provider-webhook`](https://www.npmjs.com/package/@permitrail/provider-webhook) | A production approval bridge to your own HTTPS endpoint, Slack bot, risk engine, or approval service |
 | [`@permitrail/mcp`](https://www.npmjs.com/package/@permitrail/mcp) | A runnable stdio MCP server for clients that should authorize tool calls through PermitRail |
 
