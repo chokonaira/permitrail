@@ -37,7 +37,7 @@ export const APPROVAL_PAGE = `<!doctype html>
 <div class="wrap">
 <h1>PermitRail local approval</h1>
 <p class="sub">Pending agent tool calls routed through PermitRail.</p>
-<div class="banner">Local approval. Single user, in memory, localhost only. For demos and internal tools, not production auth.</div>
+<div class="banner">Local approval for development and internal tools: single user, in memory, localhost. For production, route approvals through the webhook provider or your own service. PermitRail's policy, proofs, and receipts are the same in both.</div>
 <div id="list"><p class="empty">Waiting for pending actions...</p></div>
 </div>
 <script>
