@@ -154,6 +154,41 @@ persisted key file for production. The server exposes:
 
 See [docs/mcp.md](docs/mcp.md).
 
+## Add human approval, locally
+
+For development and internal tools, `@permitrail/local-approval` runs a localhost
+page where a person approves or denies the exact action before it runs.
+
+```bash
+npm install @permitrail/local-approval
+```
+
+```ts
+import { startLocalApproval } from '@permitrail/local-approval';
+
+const approval = await startLocalApproval({ port: 4677 });
+const gateway = new PermitRailGateway({
+  policy,
+  provider: approval.provider,
+  trustedProofKeys: [approval.publicKeyPem],
+  receiptKeyPair, // generate once and persist
+});
+
+const decision = await gateway.authorize(action);
+if (decision.outcome === 'require_proof' && decision.challenge) {
+  console.log(`Approve at ${approval.url}`);
+  const proof = await approval.waitForProof(decision.challenge.id);
+  await gateway.execute(action, runTool, { proofEnvelope: proof });
+}
+```
+
+The action pauses, the page shows the tool, recipient, amount, and purpose, and on
+approval PermitRail signs the proof, the tool runs once, and a receipt is written.
+
+This page is for local dev and internal tools (single user, in memory, localhost).
+For production, route approvals through `@permitrail/provider-webhook` or your own
+service. The policy, proofs, and receipts are identical either way.
+
 ## Try it locally
 
 Requires Node 22.6 or newer (it runs TypeScript directly for development).
