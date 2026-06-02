@@ -18,7 +18,7 @@ signed receipt lands in your audit log.
 ```mermaid
 flowchart LR
     A(["AI agent"]) --> P{"authorize<br/>policy"}
-    P -->|"needs approval"| V["approve<br/>signed proof"]
+    P -->|"needs approval"| V["a person or service approves<br/>signed proof"]
     P -->|"deny"| X["blocked<br/>signed denial"]
     V --> E["execute<br/>tool runs once"]
     E --> S[("seal<br/>signed receipt")]
@@ -35,6 +35,7 @@ different integration points, so you install only the pieces you need.
 | --- | --- | --- |
 | An app or agent gateway | `npm install @permitrail/core @permitrail/mcp-gateway @permitrail/provider-webhook` | Production path for policy, approval, replay protection, and signed receipts |
 | A local demo or internal prototype | `npm install @permitrail/core @permitrail/mcp-gateway @permitrail/provider-local` | Fastest way to see the proof flow without wiring an external approval service |
+| A local human approval flow | `npm install @permitrail/core @permitrail/mcp-gateway @permitrail/local-approval` | Pause risky tool calls for a human to approve from a local page, with signed proofs |
 | An MCP client setup | `npx @permitrail/mcp` | Run PermitRail as a stdio MCP server in Claude Desktop, Cursor, or another MCP client |
 | A verifier service | `npm install @permitrail/core` | Verify proofs and receipts without running a gateway |
 
@@ -50,6 +51,7 @@ Every package and its npm page, so you can see the full surface up front.
 | [`@permitrail/core`](https://www.npmjs.com/package/@permitrail/core) | Protocol primitives: canonical JSON, policy checks, proofs, receipts, and Web Crypto signing |
 | [`@permitrail/mcp-gateway`](https://www.npmjs.com/package/@permitrail/mcp-gateway) | An embeddable enforcement gateway with replay protection, audit receipts, and MCP-ready tool definitions |
 | [`@permitrail/provider-local`](https://www.npmjs.com/package/@permitrail/provider-local) | An in-process approval provider for demos, tests, and internal tools |
+| [`@permitrail/local-approval`](https://www.npmjs.com/package/@permitrail/local-approval) | A localhost approval server and page for human-in-the-loop approval of agent tool calls (demos and internal tools) |
 | [`@permitrail/provider-webhook`](https://www.npmjs.com/package/@permitrail/provider-webhook) | A production approval bridge to your own HTTPS endpoint, Slack bot, risk engine, or approval service |
 | [`@permitrail/mcp`](https://www.npmjs.com/package/@permitrail/mcp) | A runnable stdio MCP server for clients that should authorize tool calls through PermitRail |
 
@@ -152,6 +154,41 @@ persisted key file for production. The server exposes:
 
 See [docs/mcp.md](docs/mcp.md).
 
+## Add human approval, locally
+
+For development and internal tools, `@permitrail/local-approval` runs a localhost
+page where a person approves or denies the exact action before it runs.
+
+```bash
+npm install @permitrail/local-approval
+```
+
+```ts
+import { startLocalApproval } from '@permitrail/local-approval';
+
+const approval = await startLocalApproval({ port: 4677 });
+const gateway = new PermitRailGateway({
+  policy,
+  provider: approval.provider,
+  trustedProofKeys: [approval.publicKeyPem],
+  receiptKeyPair, // generate once and persist
+});
+
+const decision = await gateway.authorize(action);
+if (decision.outcome === 'require_proof' && decision.challenge) {
+  console.log(`Approve at ${approval.url}`);
+  const proof = await approval.waitForProof(decision.challenge.id);
+  await gateway.execute(action, runTool, { proofEnvelope: proof });
+}
+```
+
+The action pauses, the page shows the tool, recipient, amount, and purpose, and on
+approval PermitRail signs the proof, the tool runs once, and a receipt is written.
+
+This page is for local dev and internal tools (single user, in memory, localhost).
+For production, route approvals through `@permitrail/provider-webhook` or your own
+service. The policy, proofs, and receipts are identical either way.
+
 ## Try it locally
 
 Requires Node 22.6 or newer (it runs TypeScript directly for development).
@@ -193,10 +230,13 @@ agent's approval.
 
 ## Approval providers
 
-A provider answers an approval request and signs a proof. Two are included: the
-local provider (in-process, for demos and internal tools) and the webhook
-provider (routes each approval to any HTTP endpoint and signs on approval). The
-same policy and proof format also work for:
+A provider answers an approval request and signs a proof. Three approval surfaces
+are included: the local provider (`@permitrail/provider-local`, in-process, for
+tests and demos), the local approval server and page (`@permitrail/local-approval`,
+a person approves from a localhost page, for dev and internal tools), and the
+webhook provider (`@permitrail/provider-webhook`, routes each approval to your own
+HTTP endpoint and signs on approval, the production path). The same policy and
+proof format also work for:
 
 - passkeys and WebAuthn
 - email one-time codes or magic links
