@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/chokonaira/permitrail/actions/workflows/test.yml/badge.svg)](https://github.com/chokonaira/permitrail/actions/workflows/test.yml)
 [![npm](https://img.shields.io/npm/v/@permitrail/core.svg?color=cb3837&label=%40permitrail%2Fcore)](https://www.npmjs.com/package/@permitrail/core)
-[![downloads](https://img.shields.io/npm/dm/@permitrail/core.svg?color=cb3837&label=downloads%2Fmo)](https://www.npmjs.com/package/@permitrail/core)
+[![downloads](https://img.shields.io/endpoint?url=https%3A%2F%2Fchokonaira.github.io%2Fpermitrail%2Fdownloads.json)](https://www.npmjs.com/org/permitrail)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![dependencies](https://img.shields.io/badge/runtime%20dependencies-0-2ea043.svg)](package.json)
 

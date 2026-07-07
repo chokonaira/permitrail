@@ -6,6 +6,7 @@ coverage/
 dist/
 site/vendor/
 site/api/
+site/downloads.json
 *.tsbuildinfo
 .env
 .env.*

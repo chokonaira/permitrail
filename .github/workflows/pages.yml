@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  # Refresh the downloads badge daily even without a push.
+  schedule:
+    - cron: '17 6 * * *'
 
 permissions:
   contents: read
@@ -31,6 +34,9 @@ jobs:
       - run: npm run build:sandbox
       # Generates the TypeDoc API reference into site/api.
       - run: npm run docs:api
+      # Generates site/downloads.json: the Shields endpoint badge summing
+      # monthly npm downloads across all published packages.
+      - run: npm run docs:downloads
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
